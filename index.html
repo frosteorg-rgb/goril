@@ -397,6 +397,7 @@
             <div style="margin-top:6px">Players you muted: <b id="mun">0</b> <button id="umall">Unmute all</button></div>
             <div style="margin-top:8px">Travel to map</div><div><button data-m="forest">Forest</button><button data-m="city">City</button><button data-m="sky">Sky Islands</button><button data-m="lobby">Lobby</button><button data-m="shop">Shop</button><button data-m="staff" id="mst" hidden>Staff Room</button></div>
             <div style="margin-top:8px">Your player ID <small>(permanent, tied to this browser - keep it private)</small></div><div><code id="uid" style="word-break:break-all;font-size:12px"></code></div><div><button id="uidb">Show</button><button id="uidc">Copy</button></div>
+            <div style="margin-top:8px"><small>Lost your coins / cosmetics after an update? Go Online, then paste your OLD player ID here:</small></div><input type="text" id="rid" maxlength="48" placeholder="XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX"><div><button id="ridb">Restore old account</button></div>
             <div style="margin-top:10px"><button id="x">Close (M / Esc)</button></div><p class="own" style="margin-top:10px">made by Trixie, with love and too much banana.</p>
         </div>
     </div>
@@ -408,11 +409,24 @@
         try { Object.assign(S, JSON.parse(localStorage.getItem("gt2d"))) } catch (e) { }
         S.eq = Object.assign({ hat: "none", face: "none", back: "none", trail: "none", hand: "none" }, S.eq);
         S.mu = S.mu || {}; if (S.vv == null) S.vv = 80; S.vm = 0;
-        const save = () => { try { localStorage.setItem("gt2d", JSON.stringify(S)) } catch (e) { } };
+        const save = () => { try { localStorage.setItem("gt2d", JSON.stringify(S)) } catch (e) { } try { syncSoon() } catch (e) { } };
+        /* ---------- ACCOUNT SYNC: the server keeps a copy of your save so updates / new builds never wipe it ---------- */
+        let PSY = 0, PJ = 0, PAD = 0;   // PJ = server confirmed our join, PAD = server profile already loaded this session
+        const pPick = () => ({ n: S.name, hue: S.hue, coins: S.coins | 0, candy: S.candy | 0, own: S.own, eq: S.eq, mu: S.mu, vv: S.vv });
+        function pPush() { if (PSY) { clearTimeout(PSY); PSY = 0 } if (PJ && WS && WS.readyState == 1) WS.send(JSON.stringify({ t: "save", p: pPick() })) }
+        function syncSoon() { if (PSY || !PJ) return; PSY = setTimeout(() => { PSY = 0; pPush() }, 4000) }
+        function applyProfile(p) {
+            S.name = String(p.n || S.name).slice(0, 12); S.hue = +p.hue || 0; S.coins = p.coins | 0; S.candy = p.candy | 0;
+            S.own = Object.assign({}, p.own || {}); S.eq = Object.assign({ hat: "none", face: "none", back: "none", trail: "none", hand: "none" }, p.eq || {});
+            if (p.mu) S.mu = p.mu; if (p.vv != null) S.vv = p.vv;
+            try { localStorage.setItem("gt2d", JSON.stringify(S)) } catch (e) { }
+            if (typeof me !== "undefined" && me) { me.name = S.name; me.hue = S.hue; me.eq = S.eq }
+            try { rsv.last = "" } catch (e) { }
+        }
         /* permanent player ID: created on first visit, then saved forever (localStorage + 10-year cookie backup) */
         const UID = (() => {
-            const ok = v => /^[a-f0-9]{32}$/.test(v || ""); let id = "";
-            try { id = localStorage.getItem("gt2d_uid") } catch (e) { }
+            const ok = v => /^[a-f0-9]{32}$/.test(v || ""); let id = ok(window.GORIL_UID) ? window.GORIL_UID : "";   // window.GORIL_UID = permanent ID supplied by the desktop app (see README)
+            if (!ok(id)) try { id = localStorage.getItem("gt2d_uid") } catch (e) { }
             if (!ok(id)) { const m = document.cookie.match(/(?:^|; )gt2d_uid=([a-f0-9]{32})/); id = m ? m[1] : "" }
             if (!ok(id)) { const a = new Uint8Array(16); crypto.getRandomValues(a); id = [...a].map(b => b.toString(16).padStart(2, "0")).join("") }
             try { localStorage.setItem("gt2d_uid", id) } catch (e) { }
@@ -1028,7 +1042,7 @@
         $("x").onclick = () => tog(0);
         /* ---------- REAL SERVER CLIENT (WebSocket) ---------- */
         function net() {
-            vcReset(); if (WS) { try { WS.close() } catch (e) { } WS = null } RM = null; OG = {}; myId = null; ST = ""; kd = 0; if (me) me.r = ""; if (!S.online) return;
+            vcReset(); try { pPush() } catch (e) { } PJ = 0; if (WS) { try { WS.close() } catch (e) { } WS = null } RM = null; OG = {}; myId = null; ST = ""; kd = 0; if (me) me.r = ""; if (!S.online) return;
             const off = t => { say(t); S.online = 0; save(); load(M.n) };
             const host = window.GORIL_SERVER || location.host;   // desktop app pins its server; ?server= is intentionally NOT supported (a crafted link could steal your player ID)
             if (!host || !window.WebSocket) return off("No game server found - playing offline");
@@ -1045,6 +1059,7 @@
             w.onclose = () => { if (WS == w) { WS = null; RM = null; if (ok && !kd) say("Disconnected - come back to this tab to rejoin") } }
         }
         let WS = null, kd = 0;
+        addEventListener("visibilitychange", () => { if (document.hidden) try { pPush() } catch (e) { } }); addEventListener("beforeunload", () => { try { pPush() } catch (e) { } });
         function sync() { }
         function oround(dt) { if (rd.st == "play") { rd.t += dt; if (!me.it) { me.sc = (me.sc || 0) + dt; if (me.sc >= 3) { me.sc = 0; S.coins++; save() } } } else rd.t -= dt }
         function onP(d) {
@@ -1070,6 +1085,8 @@
         function onEv(d) {
             if (onEv2(d)) return;
             if (d.k == "grants") { GR = {}; (d.list || []).forEach(i => GR[String(i)] = 1); if (d.add) { say("🎁 You were given " + (CN[d.add] || d.add) + "! Equip it in the Shop"); snd(900, .3, "triangle") } return }
+            if (d.k == "profile") { PJ = 1; if (d.p) { if (!PAD || d.force) { PAD = 1; applyProfile(d.p); if (!d.force) say("Account loaded: " + S.coins + " coins") } } else { PAD = 1; pPush() } if (d.force) { say("Account updated by the server"); ren() } return }
+            if (d.k == "pfix") { S.coins = d.coins | 0; S.candy = d.candy | 0; try { localStorage.setItem("gt2d", JSON.stringify(S)) } catch (e) { } ren(); return }
             if (d.k == "note") { say(String(d.txt).slice(0, 80)); return }
             if (d.k == "uc") { if (d.on && ucOn) { ucName = String(d.name || ""); ucApply() } else if (!d.on && ucOn) ucReset(); return }
             if (d.k == "announce") { say("Staff: " + String(d.txt).slice(0, 80)); snd(500, .3); return }
@@ -1356,6 +1373,7 @@ Click a player (or press Tab) for their card: Mute / Report / Check. Staff mutes
         };
         setInterval(() => { if (!$("sv").hidden && (svTab == "players" || svTab == "give")) rsv() }, 1500);
         $("uidb").onclick = () => { uidShow = !uidShow; ren() };
+        $("ridb").onclick = () => { const v = $("rid").value.trim(); if (!v) return say("Paste your old player ID first"); if (!S.online || !PJ) return say("Switch to Online first, then try again"); wsend({ t: "restore", old: v }); $("rid").value = "" };
         $("uidc").onclick = () => { try { navigator.clipboard.writeText(fmtU()); say("ID copied") } catch (e) { say("Copy failed - select the ID text instead") } };
         $("xx").onclick = () => tog(0); document.addEventListener("visibilitychange", () => { if (!document.hidden && S.online && !WS) net() });
         $("mo0").onclick = () => { S.online = 0; save(); tog(0); load(M.n) }; $("mo1").onclick = () => { S.online = 1; save(); tog(0); load(M.n) };
