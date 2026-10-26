@@ -21,7 +21,13 @@ const readJSON = (f, d) => { try { const v = JSON.parse(fs.readFileSync(f, "utf8
 const writeJSON = (f, o) => { try { fs.writeFileSync(f + ".tmp", JSON.stringify(o)); fs.renameSync(f + ".tmp", f); } catch (e) { console.log("could not write " + path.basename(f) + ": " + e.message); } };
 /* ======================================================== */
 
-const ADMIN_KEY = process.env.ADMIN_KEY || cfg.ADMIN_KEY;
+/* ===================== ADMIN DASHBOARD KEY =====================
+   Open http://YOUR-SERVER/admin and type this key. Set ADMIN_KEY as an env var, or let the server create data/admin-key.txt. */
+const ADMIN_KEY = process.env.ADMIN_KEY || (() => {
+    let k = ""; try { k = fs.readFileSync(path.join(DATA, "admin-key.txt"), "utf8").trim(); } catch (e) { }
+    if (k.length < 16) { k = crypto.randomBytes(16).toString("hex"); try { fs.writeFileSync(path.join(DATA, "admin-key.txt"), k); } catch (e) { } }
+    return k;
+})();
 /* ================================================================ */
 
 /* ===================== STAFF LIST (server-side only) =====================
@@ -31,8 +37,9 @@ const ADMIN_KEY = process.env.ADMIN_KEY || cfg.ADMIN_KEY;
    3. Restart the server.
    You can also use env vars instead: OWNER_IDS="id1,id2"  MOD_IDS="id3,id4"
    Roles:  owner = everything (incl. ban, give cosmetics, can act on mods)   mod = kick + troll tools */
-const OWNER_ID = process.env.OWNER_ID
-const MOD_ID = process.env.MOD_ID
+const STAFF_IDS = { owner: [], mod: [] };   // leave empty and use environment variables instead (this file may be in a public repo):
+//   OWNER_ID = your player ID      MOD_ID = a moderator's player ID
+//   several people? comma-separate them:  OWNER_ID="id1,id2"   MOD_ID="id3,id4"   (OWNER_IDS / MOD_IDS also work)
 /* ======================================================================== */
 
 /* ===================== DISCORD REPORTS (server-side only) =====================
@@ -41,24 +48,25 @@ const MOD_ID = process.env.MOD_ID
    2. Set it as an environment variable (recommended):  DISCORD_WEBHOOK="https://discord.com/api/webhooks/..."
       or paste it between the quotes below. It never reaches players' browsers.
    Keep the channel private and never put the URL in a public repo. (Needs Node 18+.) */
-const WEBHOOK = process.env.DISCORD_WEBHOOK || cfg.DISCORD_WEBHOOK;
+const WEBHOOK = (process.env.DISCORD_WEBHOOK || cfg.DISCORD_WEBHOOK || "").trim();
+const WEBHOOK_OK = /^https:\/\/(?:[a-z]+\.)?discord(?:app)?\.com\/api\/webhooks\/\d+\/[\w-]+/i.test(WEBHOOK);   // a placeholder / empty value counts as "not set up"
 /* ======================================================================== */
 
 const sha = s => crypto.createHash("sha256").update(s).digest("hex");
 const norm = v => String(v == null ? "" : v).toLowerCase().replace(/[^a-f0-9]/g, "");
 const ROLE = new Map();           // sha256(id) -> "owner" | "mod"  (raw IDs are never kept in memory)
 const addIds = (list, r) => list.forEach(i => { const n = norm(i); if (n.length === 32) ROLE.set(sha(n), r); });
-addIds(OWNER_ID.owner, "owner"); addIds(MOD_ID.mod, "mod");
-addIds((process.env.OWNER_IDS || "").split(","), "owner"); addIds((process.env.MOD_IDS || "").split(","), "mod");
+const envList = (...names) => names.map(n => process.env[n] || "").join(",").split(",").map(x => x.trim()).filter(Boolean);   // never undefined
+addIds(STAFF_IDS.owner || [], "owner"); addIds(STAFF_IDS.mod || [], "mod");
+addIds(envList("OWNER_ID", "OWNER_IDS"), "owner"); addIds(envList("MOD_ID", "MOD_IDS"), "mod");
 const CFG = new Set(ROLE.keys());   // staff set in this file / env vars (not editable in-game)
 const STF = dp("staff.json");   // staff promoted in-game / from the dashboard (hashed IDs). Old format (array of mods) still loads.
-{
-    const sj = readJSON(STF, []);
-    const mods = Array.isArray(sj) ? sj : (sj.mod || []), owners = Array.isArray(sj) ? [] : (sj.owner || []);
-    mods.forEach(h => { if (!ROLE.has(h)) ROLE.set(h, "mod"); }); owners.forEach(h => { if (!ROLE.has(h)) ROLE.set(h, "owner"); });
-}
+{ const sj = readJSON(STF, []);
+  const mods = Array.isArray(sj) ? sj : (sj.mod || []), owners = Array.isArray(sj) ? [] : (sj.owner || []);
+  mods.forEach(h => { if (!ROLE.has(h)) ROLE.set(h, "mod"); }); owners.forEach(h => { if (!ROLE.has(h)) ROLE.set(h, "owner"); }); }
 const saveStaff = () => writeJSON(STF, { owner: [...ROLE].filter(([h, r]) => r === "owner" && !CFG.has(h)).map(x => x[0]), mod: [...ROLE].filter(([h, r]) => r === "mod" && !CFG.has(h)).map(x => x[0]) });
 const RANK = { owner: 2, mod: 1, "": 0 };
+if (![...ROLE.values()].includes("owner")) console.log("WARNING: no owner is set. Set the OWNER_ID environment variable to your player ID (menu > Show), then restart.");
 console.log("Staff loaded: " + [...ROLE.values()].filter(r => r === "owner").length + " owner(s), " + [...ROLE.values()].filter(r => r === "mod").length + " mod(s)");
 
 // bans are stored as hashed IDs in bans.json (delete an entry to unban)
@@ -136,7 +144,7 @@ const FX = ["launch", "freeze", "invert", "lowgrav", "goto", "slow", "rocket", "
    One record per player, keyed by sha256(player ID): name, fur color, coins, candy, owned + equipped cosmetics, first/last seen, logins, playtime.
    The game client loads it when it connects, so a new .exe build no longer wipes anything as long as the player ID stays the same
    (and if the ID does change, "Restore old account" in the menu or "Link" in the dashboard moves the old profile to the new ID). */
-const PRICE = { "beanie": { "p": 20, "lk": 0 }, "party": { "p": 30, "lk": 0 }, "cowboy": { "p": 50, "lk": 0 }, "top": { "p": 70, "lk": 0 }, "prop": { "p": 90, "lk": 0 }, "halo": { "p": 120, "lk": 0 }, "crown": { "p": 200, "lk": 0 }, "wiz": { "p": 150, "lk": 0 }, "horns": { "p": 110, "lk": 0 }, "witch": { "p": 90, "lk": 0 }, "pumpkin": { "p": 110, "lk": 0 }, "mummy": { "p": 80, "lk": 0 }, "skullcap": { "p": 70, "lk": 0 }, "gpump": { "p": 0, "lk": 60 }, "shades": { "p": 25, "lk": 0 }, "monocle": { "p": 40, "lk": 0 }, "stache": { "p": 45, "lk": 0 }, "nose": { "p": 60, "lk": 0 }, "visor": { "p": 80, "lk": 0 }, "vamp": { "p": 50, "lk": 0 }, "stitch": { "p": 40, "lk": 0 }, "skullmask": { "p": 90, "lk": 0 }, "pack": { "p": 30, "lk": 0 }, "cape": { "p": 80, "lk": 0 }, "wings": { "p": 150, "lk": 0 }, "jet": { "p": 220, "lk": 0 }, "bat": { "p": 130, "lk": 0 }, "ghost": { "p": 160, "lk": 0 }, "candybag": { "p": 60, "lk": 0 }, "broom": { "p": 100, "lk": 0 }, "scythe": { "p": 0, "lk": 100 }, "spark": { "p": 60, "lk": 0 }, "fire": { "p": 100, "lk": 0 }, "bubble": { "p": 100, "lk": 0 }, "rain": { "p": 180, "lk": 0 }, "star": { "p": 140, "lk": 0 }, "heart": { "p": 140, "lk": 0 }, "bats": { "p": 120, "lk": 0 }, "candy": { "p": 100, "lk": 0 }, "wisp": { "p": 110, "lk": 0 }, "ember": { "p": 90, "lk": 0 }, "witchfire": { "p": 0, "lk": 30 } };
+const PRICE = {"beanie":{"p":20,"lk":0},"party":{"p":30,"lk":0},"cowboy":{"p":50,"lk":0},"top":{"p":70,"lk":0},"prop":{"p":90,"lk":0},"halo":{"p":120,"lk":0},"crown":{"p":200,"lk":0},"wiz":{"p":150,"lk":0},"horns":{"p":110,"lk":0},"witch":{"p":90,"lk":0},"pumpkin":{"p":110,"lk":0},"mummy":{"p":80,"lk":0},"skullcap":{"p":70,"lk":0},"gpump":{"p":0,"lk":60},"shades":{"p":25,"lk":0},"monocle":{"p":40,"lk":0},"stache":{"p":45,"lk":0},"nose":{"p":60,"lk":0},"visor":{"p":80,"lk":0},"vamp":{"p":50,"lk":0},"stitch":{"p":40,"lk":0},"skullmask":{"p":90,"lk":0},"pack":{"p":30,"lk":0},"cape":{"p":80,"lk":0},"wings":{"p":150,"lk":0},"jet":{"p":220,"lk":0},"bat":{"p":130,"lk":0},"ghost":{"p":160,"lk":0},"candybag":{"p":60,"lk":0},"broom":{"p":100,"lk":0},"scythe":{"p":0,"lk":100},"spark":{"p":60,"lk":0},"fire":{"p":100,"lk":0},"bubble":{"p":100,"lk":0},"rain":{"p":180,"lk":0},"star":{"p":140,"lk":0},"heart":{"p":140,"lk":0},"bats":{"p":120,"lk":0},"candy":{"p":100,"lk":0},"wisp":{"p":110,"lk":0},"ember":{"p":90,"lk":0},"witchfire":{"p":0,"lk":30}};
 const PRF = dp("profiles.json"), EVF = dp("events.json"), STATF = dp("stats.json");
 const profiles = readJSON(PRF, {}), events = readJSON(EVF, []), stats = readJSON(STATF, { hist: [] });
 if (!Array.isArray(events)) events.length = 0; if (!Array.isArray(stats.hist)) stats.hist = [];
@@ -233,13 +241,15 @@ console.log("Data folder: " + DATA + "  (" + Object.keys(profiles).length + " sa
 console.log("Admin dashboard: http://localhost:" + PORT + "/admin   key: " + ADMIN_KEY);
 
 /* ---------- ADMIN DASHBOARD API ---------- */
-const adminFails = new Map();
+const adminFails = new Map(), logTok = new Map(), sess = new Map();   // logTok: one-time links from the in-game staff menu, sess: dashboard sessions they turn into
+const sessOK = t => { const e = sess.get(t); if (!e) return false; if (e < Date.now()) { sess.delete(t); return false; } return true; };
+setInterval(() => { const n = Date.now(); logTok.forEach((v, k) => v < n && logTok.delete(k)); sess.forEach((v, k) => v < n && sess.delete(k)); }, 60000);
 const ipOf = req => (TRUST_PROXY && String(req.headers["x-forwarded-for"] || "").split(",")[0].trim()) || req.socket.remoteAddress || "?";
 const adminOK = req => {
     const ip = ipOf(req), n = Date.now(), F = (adminFails.get(ip) || []).filter(t => n - t < 600000);
     if (F.length >= 10) return 429;
     const given = String(req.headers.authorization || "").replace(/^Bearer /, "");
-    if (crypto.timingSafeEqual(Buffer.from(sha(given)), Buffer.from(sha(ADMIN_KEY)))) return 200;
+    if (crypto.timingSafeEqual(Buffer.from(sha(given)), Buffer.from(sha(ADMIN_KEY))) || sessOK(given)) return 200;
     F.push(n); adminFails.set(ip, F); return 401;
 };
 const adminView = (uh, on) => {
@@ -249,16 +259,23 @@ const adminView = (uh, on) => {
 const findRef = r => { r = String(r || "").toLowerCase(); return /^[a-f0-9]{64}$/.test(r) && profiles[r] ? r : null; };
 const adminApi = (req, res, route) => {
     const send = (code, o) => { res.writeHead(code, { "Content-Type": "application/json", "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" }); res.end(JSON.stringify(o)); };
-    const st = adminOK(req); if (st !== 200) return send(st, { error: st === 429 ? "Too many wrong keys, wait 10 minutes." : "Wrong key" });
     let body = ""; req.on("data", c => { body += c; if (body.length > 20000) req.destroy(); });
     req.on("end", () => {
         let m = {}; if (body) try { m = JSON.parse(body); } catch (e) { return send(400, { error: "bad json" }); }
+        if (route === "login") {   // exchange the one-time link from the in-game staff menu for a dashboard session (8 h)
+            const ip = ipOf(req), n0 = Date.now(), F = (adminFails.get(ip) || []).filter(t => n0 - t < 600000);
+            if (F.length >= 10) return send(429, { error: "Too many tries, wait 10 minutes." });
+            const tk = String(m.token || ""), exp = logTok.get(tk); logTok.delete(tk);
+            if (!exp || exp < n0) { F.push(n0); adminFails.set(ip, F); return send(401, { error: "That link expired - press the button in the game again." }); }
+            const t = crypto.randomBytes(24).toString("hex"); sess.set(t, n0 + 8 * 3600000); return send(200, { key: t });
+        }
+        const st = adminOK(req); if (st !== 200) return send(st, { error: st === 429 ? "Too many wrong keys, wait 10 minutes." : "Wrong key" });
         const on = onlineInfo(), n = Date.now();
         try {
             if (route === "overview") {
                 const list = Object.keys(profiles).filter(h => !profiles[h].stub), day = n - 86400000;
                 const h24 = stats.hist.filter(x => x[0] > day), peak = h24.reduce((a, x) => Math.max(a, x[1]), on.total);
-                return send(200, { online: on.total, unique: on.by.size, rooms: on.rms, peak24: peak, total: list.length, new24: list.filter(h => profiles[h].first > day).length, new7: list.filter(h => profiles[h].first > n - 7 * 86400000).length, active24: list.filter(h => profiles[h].last > day).length, hist: stats.hist, events: events.slice(-80).reverse(), coinsTotal: list.reduce((a, h) => a + profiles[h].coins, 0), banned: bans.size, now: n });
+                return send(200, { online: on.total, unique: on.by.size, rooms: on.rms, peak24: peak, total: list.length, new24: list.filter(h => profiles[h].first > day).length, new7: list.filter(h => profiles[h].first > n - 7 * 86400000).length, active24: list.filter(h => profiles[h].last > day).length, hist: stats.hist, events: events.slice(-80).reverse(), coinsTotal: list.reduce((a, h) => a + profiles[h].coins, 0), banned: bans.size, now: n, webhook: WEBHOOK_OK ? 1 : 0 });
             }
             if (route === "players") {
                 const q = str(m.q, 40).toLowerCase(); let L = Object.keys(profiles).filter(h => !profiles[h].stub || on.by.has(h));
@@ -266,6 +283,13 @@ const adminApi = (req, res, route) => {
                 if (m.only === "online") L = L.filter(h => on.by.has(h)); else if (m.only === "staff") L = L.filter(h => ROLE.get(h)); else if (m.only === "banned") L = L.filter(h => bans.has(h));
                 L.sort((a, b) => m.sort === "coins" ? profiles[b].coins - profiles[a].coins : m.sort === "first" ? profiles[b].first - profiles[a].first : profiles[b].last - profiles[a].last);
                 return send(200, { total: L.length, players: L.slice(0, 300).map(h => adminView(h, on)) });
+            }
+            if (route === "webhooktest") {
+                if (!WEBHOOK_OK) return send(200, { ok: 0, msg: "This server has no valid DISCORD_WEBHOOK. Set it as an environment variable on the host that runs server.js (or in config.json), then restart." });
+                fetch(WEBHOOK, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ username: "goril reports", content: "✅ Test message from the goril admin dashboard. Reports will arrive here." }) })
+                    .then(r => send(200, { ok: r.ok ? 1 : 0, msg: r.ok ? "Sent! Check your Discord channel." : "Discord answered " + r.status + (r.status === 404 || r.status === 401 ? " - the webhook was deleted or the URL is wrong." : ".") }))
+                    .catch(e => send(200, { ok: 0, msg: "This server could not reach Discord: " + e.message }));
+                return;
             }
             if (route === "catalog") return send(200, { items: Object.keys(PRICE).map(k => ({ id: k, p: PRICE[k].p, lk: PRICE[k].lk })) });
             if (route === "announce") { const txt = cleanName(m.txt, 80); if (!txt) return send(400, { error: "empty" }); for (const R of rooms.values()) bc(R, { t: "ev", k: "announce", txt }); logEv("announce", "", "", txt); return send(200, { ok: 1 }); }
@@ -391,7 +415,8 @@ const doReport = (ws, m) => {
     ws.rl = (ws.rl || []).filter(t => n - t < 3600000);
     if (n - (ws.rp || 0) < 20000) return note(ws, "Please wait a few seconds before sending another report.");
     if (ws.rl.length >= 8) return note(ws, "You have sent a lot of reports - please try again later.");
-    if (!WEBHOOK || typeof fetch !== "function") {
+    if (!WEBHOOK_OK || typeof fetch !== "function") {
+        logEv("reportfail", "", "", "no valid DISCORD_WEBHOOK on this server");
         console.log("[report] NOT delivered (set DISCORD_WEBHOOK, Node 18+ needed): " + dn(me) + " reported " + dn(tp) + " for " + str(m.why, 12));
         return note(ws, "Reports are not set up on this server yet.");
     }
@@ -413,8 +438,8 @@ const doReport = (ws, m) => {
         }]
     };
     fetch(WEBHOOK, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
-        .then(r => { if (!r.ok) console.log("[report] Discord answered " + r.status); })
-        .catch(e => console.log("[report] could not reach Discord: " + e.message));
+        .then(r => { if (!r.ok) { console.log("[report] Discord answered " + r.status); logEv("reportfail", "", "", "Discord answered " + r.status); } })
+        .catch(e => { console.log("[report] could not reach Discord: " + e.message); logEv("reportfail", "", "", "cannot reach Discord"); });
     console.log("[report] " + dn(me) + " -> " + dn(tp) + " (" + why + ")");
     note(ws, "Report sent to the staff team. Thank you!");
 };
@@ -484,6 +509,10 @@ wss.on("connection", (ws, req) => {
                 if (on && !ws.uc) { ws.uc = 1; ws.ucn = pickName(R); me.s.n = ws.ucn; } else if (!on) { ws.uc = 0; me.s.n = me.rn; }
                 ws.send(JSON.stringify({ t: "ev", k: "uc", on: ws.uc, name: ws.uc ? ws.ucn : "" }));
                 console.log("[staff] " + ws.role + " " + me.rn + " -> undercover " + (ws.uc ? "ON as " + ws.ucn : "OFF")); return;
+            }
+            if (k === "adminlink") {   // OWNER ONLY: hand out a one-time (60 s) link that signs the dashboard in without typing the key
+                if (!O) return; const t = crypto.randomBytes(18).toString("hex"); logTok.set(t, Date.now() + 60000);
+                ws.send(JSON.stringify({ t: "ev", k: "adminlink", path: "/admin#t=" + t })); logEv("adminlink", ws.uh, me.rn, ""); return;
             }
             if (k === "announce") { const txt = cleanName(m.txt, 80); if (txt) bc(R, { t: "ev", k: "announce", txt }); return; }
             if (O && !R.lobby && k === "newround") { R.st = "wait"; R.t = 1; R.m.forEach(p => p.s.it = 0); console.log("[staff] owner " + me.rn + " -> new round"); return; }
