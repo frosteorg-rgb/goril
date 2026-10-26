@@ -430,7 +430,9 @@
             if (!ok(id)) { const m = document.cookie.match(/(?:^|; )gt2d_uid=([a-f0-9]{32})/); id = m ? m[1] : "" }
             if (!ok(id)) { const a = new Uint8Array(16); crypto.getRandomValues(a); id = [...a].map(b => b.toString(16).padStart(2, "0")).join("") }
             try { localStorage.setItem("gt2d_uid", id) } catch (e) { }
-            document.cookie = "gt2d_uid=" + id + ";max-age=315360000;path=/;SameSite=Lax"; return id
+            document.cookie = "gt2d_uid=" + id + ";max-age=315360000;path=/;SameSite=Lax";
+            try { if (!ok(window.GORIL_UID) && typeof window.GORIL_SAVEUID == "function") window.GORIL_SAVEUID(id) } catch (e) { }   // desktop app: remember the ID we ended up with, outside the app
+            return id
         })();
         let uidShow = 0, ST = ""; const fmtU = () => UID.toUpperCase().match(/.{4}/g).join("-");
         const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
