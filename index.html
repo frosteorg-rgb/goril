@@ -1089,6 +1089,11 @@
             if (d.k == "grants") { GR = {}; (d.list || []).forEach(i => GR[String(i)] = 1); if (d.add) { say("🎁 You were given " + (CN[d.add] || d.add) + "! Equip it in the Shop"); snd(900, .3, "triangle") } return }
             if (d.k == "profile") { PJ = 1; if (d.p) { if (!PAD || d.force) { PAD = 1; applyProfile(d.p); if (!d.force) say("Account loaded: " + S.coins + " coins") } } else { PAD = 1; pPush() } if (d.force) { say("Account updated by the server"); ren() } return }
             if (d.k == "pfix") { S.coins = d.coins | 0; S.candy = d.candy | 0; try { localStorage.setItem("gt2d", JSON.stringify(S)) } catch (e) { } ren(); return }
+            if (d.k == "adminlink") {
+                let u = ""; try { const b = new URL(WS.url); u = (b.protocol == "wss:" ? "https:" : "http:") + "//" + b.host + String(d.path) } catch (e) { }
+                if (!u) return say("Could not work out the server address");
+                try { if (typeof window.GORIL_OPEN == "function") window.GORIL_OPEN(u); else window.open(u, "_blank") } catch (e) { say("Could not open the browser") } return
+            }
             if (d.k == "note") { say(String(d.txt).slice(0, 80)); return }
             if (d.k == "uc") { if (d.on && ucOn) { ucName = String(d.name || ""); ucApply() } else if (!d.on && ucOn) ucReset(); return }
             if (d.k == "announce") { say("Staff: " + String(d.txt).slice(0, 80)); snd(500, .3); return }
@@ -1357,7 +1362,7 @@ Click a player (or press Tab) for their card: Mute / Report / Check. Staff mutes
             } else {
                 h += `<h4>Troll everyone (not owners)</h4>` + [["kick", "Kick all"], ["infect", "Infect all"], ["cure", "Cure all"]].concat(FXB).map(([a, n]) => `<button class="${a == "kick" ? "red" : ""}" data-x="${a}|all">${n}${a == "goto" ? " all" : ""}</button>`).join("");
                 h += `<h4>Round control</h4><button data-x="newround|">New round</button><button data-x="endround|">End round</button>`;
-                h += `<h4>Your powers</h4><button data-s="fly" class="${flyOn ? "on" : ""}">Fly ${flyOn ? "ON" : "off"}</button><button data-s="coins">+1000 coins</button><small><br>Fly: A/D sideways, W up, S down.</small>`;
+                h += `<h4>Your powers</h4><button data-s="fly" class="${flyOn ? "on" : ""}">Fly ${flyOn ? "ON" : "off"}</button><button data-s="coins">+1000 coins</button><button data-s="admin">Open admin dashboard</button><small><br>Fly: A/D sideways, W up, S down.</small>`;
                 h += `<h4>Moderators</h4><small>Open the players tab: "Make mod" / "Remove mod" promotes anyone in the room. Saved on the server.</small>`
             }
             if (h + svTab == rsv.last) return; rsv.last = h + svTab; $("svc").innerHTML = h
@@ -1370,7 +1375,7 @@ Click a player (or press Tab) for their card: Mute / Report / Check. Staff mutes
             else if (d.gi) { cmd(gvMode, gvTo, "", d.gi); snd(600, .1) }
             else if (d.q) { const [c, i] = d.q.split("|"); if (ST && (i == "none" || (SCAT[c] || []).some(x => x[0] == i && (x[2] == "m" || ST == "owner")))) { S.eq[c] = i; save(); rsv.last = ""; rsv() } }
             else if (d.g) { const g = OG[d.g]; if (g) { me.x = g.tx; me.y = g.ty - 30; me.vx = me.vy = 0 } }
-            else if (d.s) { if (d.s == "uc") ucToggle(); else if (ST == "owner") { if (d.s == "fly") { flyOn = !flyOn; me.vx = me.vy = 0; say(flyOn ? "Fly ON" : "Fly OFF") } else if (d.s == "coins") { S.coins += 1000; save(); say("+1000 coins") } } rsv.last = ""; rsv() }
+            else if (d.s) { if (d.s == "uc") ucToggle(); else if (ST == "owner") { if (d.s == "fly") { flyOn = !flyOn; me.vx = me.vy = 0; say(flyOn ? "Fly ON" : "Fly OFF") } else if (d.s == "coins") { S.coins += 1000; save(); say("+1000 coins") } else if (d.s == "admin") { cmd("adminlink"); say("Opening the admin dashboard...") } } rsv.last = ""; rsv() }
             else if (d.x) { const [k, to] = d.x.split("|"); if (k == "announce") { const t = ($("ann").value || "").trim(); if (t) { cmd("announce", "", t); $("ann").value = "" } } else cmd(k, to); snd(600, .1) }
         };
         setInterval(() => { if (!$("sv").hidden && (svTab == "players" || svTab == "give")) rsv() }, 1500);
