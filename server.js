@@ -52,22 +52,31 @@ const WEBHOOK = (process.env.DISCORD_WEBHOOK || cfg.DISCORD_WEBHOOK || "").trim(
 const WEBHOOK_OK = /^https:\/\/(?:[a-z]+\.)?discord(?:app)?\.com\/api\/webhooks\/\d+\/[\w-]+/i.test(WEBHOOK);   // a placeholder / empty value counts as "not set up"
 /* ======================================================================== */
 
+/* ===================== CALL-A-MOD WEBHOOK (server-side only) =====================
+   Players press "Call a mod" in the menu: every mod/owner online is notified in-game and a message is posted to a SECOND Discord webhook.
+   Set it as an environment variable:  DISCORD_CALLMOD_WEBHOOK="https://discord.com/api/webhooks/..."   (or in config.json). */
+const WEBHOOK2 = (process.env.DISCORD_CALLMOD_WEBHOOK || cfg.DISCORD_CALLMOD_WEBHOOK || "").trim();
+const WEBHOOK2_OK = /^https:\/\/(?:[a-z]+\.)?discord(?:app)?\.com\/api\/webhooks\/\d+\/[\w-]+/i.test(WEBHOOK2);
+/* ================================================================================= */
+
 const sha = s => crypto.createHash("sha256").update(s).digest("hex");
 const norm = v => String(v == null ? "" : v).toLowerCase().replace(/[^a-f0-9]/g, "");
 const ROLE = new Map();           // sha256(id) -> "owner" | "mod"  (raw IDs are never kept in memory)
 const addIds = (list, r) => list.forEach(i => { const n = norm(i); if (n.length === 32) ROLE.set(sha(n), r); });
 const envList = (...names) => names.map(n => process.env[n] || "").join(",").split(",").map(x => x.trim()).filter(Boolean);   // never undefined
 addIds(STAFF_IDS.owner || [], "owner"); addIds(STAFF_IDS.mod || [], "mod");
-addIds(envList("OWNER_ID", "OWNER_IDS"), "owner"); addIds(envList("MOD_ID", "MOD_IDS"), "mod");
+addIds(envList("OWNER_ID", "OWNER_IDS"), "owner"); addIds(envList("MOD_ID", "MOD_IDS"), "mod"); addIds(envList("CREATOR_ID", "CREATOR_IDS"), "creator");
 const CFG = new Set(ROLE.keys());   // staff set in this file / env vars (not editable in-game)
 const STF = dp("staff.json");   // staff promoted in-game / from the dashboard (hashed IDs). Old format (array of mods) still loads.
 {
     const sj = readJSON(STF, []);
     const mods = Array.isArray(sj) ? sj : (sj.mod || []), owners = Array.isArray(sj) ? [] : (sj.owner || []);
     mods.forEach(h => { if (!ROLE.has(h)) ROLE.set(h, "mod"); }); owners.forEach(h => { if (!ROLE.has(h)) ROLE.set(h, "owner"); });
+    (Array.isArray(sj) ? [] : (sj.creator || [])).forEach(h => { if (!ROLE.has(h)) ROLE.set(h, "creator"); });
 }
-const saveStaff = () => writeJSON(STF, { owner: [...ROLE].filter(([h, r]) => r === "owner" && !CFG.has(h)).map(x => x[0]), mod: [...ROLE].filter(([h, r]) => r === "mod" && !CFG.has(h)).map(x => x[0]) });
-const RANK = { owner: 2, mod: 1, "": 0 };
+const saveStaff = () => writeJSON(STF, { owner: [...ROLE].filter(([h, r]) => r === "owner" && !CFG.has(h)).map(x => x[0]), mod: [...ROLE].filter(([h, r]) => r === "mod" && !CFG.has(h)).map(x => x[0]), creator: [...ROLE].filter(([h, r]) => r === "creator" && !CFG.has(h)).map(x => x[0]) });
+const RANK = { owner: 2, mod: 1, creator: 0.5, "": 0 };
+const isStaff = w => w.role === "owner" || w.role === "mod";   // content creators have a role, but none of the staff powers
 if (![...ROLE.values()].includes("owner")) console.log("WARNING: no owner is set. Set the OWNER_ID environment variable to your player ID (menu > Show), then restart.");
 console.log("Staff loaded: " + [...ROLE.values()].filter(r => r === "owner").length + " owner(s), " + [...ROLE.values()].filter(r => r === "mod").length + " mod(s)");
 
@@ -293,7 +302,7 @@ const adminApi = (req, res, route) => {
                     .catch(e => send(200, { ok: 0, msg: "This server could not reach Discord: " + e.message }));
                 return;
             }
-            if (route === "catalog") return send(200, { items: Object.keys(PRICE).map(k => ({ id: k, p: PRICE[k].p, lk: PRICE[k].lk })) });
+            if (route === "catalog") return send(200, { items: Object.keys(PRICE).map(k => ({ id: k, p: PRICE[k].p, lk: PRICE[k].lk })).concat([...REG_IDS].filter(k => !PRICE[k]).map(k => ({ id: k, p: 0, lk: 0, gr: 1 }))) });
             if (route === "announce") { const txt = cleanName(m.txt, 80); if (!txt) return send(400, { error: "empty" }); for (const R of rooms.values()) bc(R, { t: "ev", k: "announce", txt }); logEv("announce", "", "", txt); return send(200, { ok: 1 }); }
             const uh = findRef(m.ref), p = uh && profiles[uh];
             if (!p) return send(404, { error: "player not found" });
@@ -309,7 +318,7 @@ const adminApi = (req, res, route) => {
             }
             if (route === "rename") { const nm = cleanName(m.n, 12); if (!nm) return send(400, { error: "empty" }); p.n = nm; mark(); pushProfile(uh); return send(200, { ok: 1 }); }
             if (route === "role") {
-                const r = m.role === "owner" || m.role === "mod" ? m.role : ""; if (CFG.has(uh)) return send(400, { error: "This role is set in server.js / env vars - change it there." });
+                const r = m.role === "owner" || m.role === "mod" || m.role === "creator" ? m.role : ""; if (CFG.has(uh)) return send(400, { error: "This role is set in server.js / env vars - change it there." });
                 if (r) ROLE.set(uh, r); else ROLE.delete(uh); saveStaff();
                 socksOf(uh).forEach(w => { w.role = r; if (!r && w.uc) { w.uc = 0; } }); logEv("role", uh, p.n, r || "none"); return send(200, { ok: 1, note: "Takes effect in-game the next time they change map / reconnect." });
             }
@@ -344,7 +353,7 @@ const pk = p => p.ws.role ? "s" + p.ws.id : p.ws.uh ? (p.ws.pk || (p.ws.pk = sha
 const newCS = () => ({ t0: Date.now(), px: null, py: null, pt: 0, smp: [], ups: [], maxv: 0, spd: 0, st: 0, tele: 0, tt: 0, hand: 0, ht: 0, vel: 0, vt: 0, flood: 0, flt: 0, bad: 0, bt: 0, fx: 0 });
 const badItem = pl => { const c = pl.cs, n = Date.now(); if (n - c.bt > 5000) { c.bad++; c.bt = n; } };
 const track = (pl, ws) => {
-    const c = pl.cs, s = pl.s, n = Date.now(); if (ws.role) return;            // staff are exempt (they can fly / teleport)
+    const c = pl.cs, s = pl.s, n = Date.now(); if (isStaff(ws)) return;            // staff are exempt (they can fly / teleport)
     c.ups = c.ups.filter(t => n - t < 1000); c.ups.push(n);
     if (c.ups.length > 45 && n - c.flt > 5000) { c.flood++; c.flt = n; }       // the real client sends ~22 updates/sec
     if (s.h.some(v => Math.abs(v) > 100) && n - c.ht > 5000) { c.hand++; c.ht = n; }
@@ -365,7 +374,7 @@ const track = (pl, ws) => {
 };
 const checkOf = tp => {
     const c = tp.cs, secs = (Date.now() - c.t0) / 1000 | 0, fl = [];
-    if (tp.ws.role && !tp.ws.uc) return { v: "staff", secs, maxv: 0, fl };     // undercover staff look like ordinary clean players
+    if (isStaff(tp.ws) && !tp.ws.uc) return { v: "staff", secs, maxv: 0, fl };     // undercover staff look like ordinary clean players
     if (c.spd) fl.push("Moved faster than the game allows (" + c.spd + "x)");
     if (c.tele) fl.push("Teleported across the map (" + c.tele + "x)");
     if (c.hand) fl.push("Impossible arm positions (" + c.hand + "x)");
@@ -447,6 +456,43 @@ const doReport = (ws, m) => {
 };
 
 
+// --- "Call a mod": notifies every mod/owner online (any room) and posts to the call-a-mod Discord webhook ---
+const doCallMod = ws => {
+    const n = Date.now(), R = ws.room, me = R && R.m.get(ws.id); if (!me) return;
+    ws.cml = (ws.cml || []).filter(t => n - t < 3600000);
+    if (n - (ws.cm || 0) < 60000) return note(ws, "You already called a mod. Please wait a minute before calling again.");
+    if (ws.cml.length >= 5) return note(ws, "You have called a lot - please try again later.");
+    const i = ws.rname.lastIndexOf("-"), code = i > 0 ? ws.rname.slice(0, i) : ws.rname, map = i > 0 ? ws.rname.slice(i + 1) : "";
+    const nm = dn(me), msg = JSON.stringify({ t: "ev", k: "modcall", n: nm, code, map });
+    let cnt = 0; for (const w of wss.clients) if (w !== ws && w.readyState === 1 && w.room && isStaff(w)) { w.send(msg); cnt++; }
+    const hook = WEBHOOK2_OK && typeof fetch === "function";
+    if (!cnt && !hook) return note(ws, "No moderators are online right now.");
+    ws.cm = n; ws.cml.push(n);
+    if (hook) {
+        const ck = checkOf(me), chat = R.chat.slice(-8).map(c => "[" + ((n - c.at) / 1000 | 0) + "s ago] " + clean(c.n, 12) + ": " + clean(c.t, 120)).join("\n") || "(no recent chat)";
+        const body = {
+            username: "goril - call a mod", allowed_mentions: { parse: [] },
+            embeds: [{
+                title: "🆘 A player is asking for a moderator", color: 0xe62117, timestamp: new Date(n).toISOString(),
+                fields: [
+                    { name: "Player", value: "**" + clean(nm, 12) + "**" + (ws.role ? " (" + ws.role + ")" : ""), inline: true },
+                    { name: "Player ID", value: "`" + ref(me) + "`", inline: true },
+                    { name: "Room code", value: "`" + clean(code, 16) + "` on **" + clean(map, 10) + "**", inline: true },
+                    { name: "Players in that room", value: String(R.m.size), inline: true },
+                    { name: "Mods online in game", value: String(cnt), inline: true },
+                    { name: "Automatic check", value: ("**" + ck.v + "** - " + (ck.fl.join(", ") || "no flags")).slice(0, 500) },
+                    { name: "Recent chat in that room", value: "```\n" + chat.slice(0, 900) + "\n```" }
+                ]
+            }]
+        };
+        fetch(WEBHOOK2, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
+            .then(r => { if (!r.ok) { console.log("[callmod] Discord answered " + r.status); logEv("reportfail", "", "", "call-a-mod Discord answered " + r.status); } })
+            .catch(e => { console.log("[callmod] could not reach Discord: " + e.message); logEv("reportfail", "", "", "cannot reach Discord (call a mod)"); });
+    }
+    logEv("callmod", ws.uh, nm, ws.rname); console.log("[callmod] " + nm + " in " + ws.rname + " (" + cnt + " mods online)");
+    note(ws, cnt ? "Moderators notified (" + cnt + " online)." : "No mods are online in game - staff were alerted on Discord.");
+};
+
 wss.on("connection", (ws, req) => {
     const ip = (TRUST_PROXY && String(req.headers["x-forwarded-for"] || "").split(",")[0].trim()) || req.socket.remoteAddress || "?";
     if ((ips.get(ip) || 0) >= MAX_PER_IP) return ws.close();
@@ -464,7 +510,7 @@ wss.on("connection", (ws, req) => {
             ws.mu = ws.uh && (smute.get(ws.uh) || 0) > Date.now() ? 1 : 0;
             const name = str(m.room, 40).toLowerCase().replace(/[^a-z0-9-]/g, "") || "public-lobby";
             // the staff room only lets verified staff in (role comes from the server list, never the client)
-            if (/-staff$/.test(name) && !ws.role) { ws.send(JSON.stringify({ t: "ev", k: "denied" })); return ws.close(); }
+            if (/-staff$/.test(name) && !isStaff(ws)) { ws.send(JSON.stringify({ t: "ev", k: "denied" })); return ws.close(); }
             let R = rooms.get(name);
             if (!R) { if (rooms.size >= MAX_ROOMS) return ws.close(); R = { m: new Map(), st: "wait", t: 3, last: null, chat: [], lobby: /-(lobby|staff|shop)$/.test(name) }; rooms.set(name, R); }
             if (R.m.size >= 16) return ws.close();
@@ -490,7 +536,7 @@ wss.on("connection", (ws, req) => {
                 v = str(v, 12); if (v === "" || v === "none") return v; if (!SLOT_OK[slot].has(v)) { badItem(pl); return ""; }
                 if (v.startsWith("cc_")) { if (ws.role || (ws.uh && gl(ws.uh).includes(v))) return v; badItem(pl); return ""; }   // content creator items: only if the owner gave them to this player
                 if (!v.startsWith("st_")) return v;
-                if (!ws.role || ws.uc) { if (!ws.role) badItem(pl); return ""; } return v.startsWith("st_o") && ws.role !== "owner" ? "" : v;
+                if (!isStaff(ws) || ws.uc) { if (!isStaff(ws)) badItem(pl); return ""; } return v.startsWith("st_o") && ws.role !== "owner" ? "" : v;
             };
             s.e = { hat: ok("hat", e.hat), face: ok("face", e.face), back: ok("back", e.back), trail: ok("trail", e.trail), hand: ok("hand", e.hand) };
             track(pl, ws);
@@ -502,11 +548,18 @@ wss.on("connection", (ws, req) => {
             doCheck(ws, m);
         } else if (m.t === "report" && ws.room) {
             doReport(ws, m);
+        } else if (m.t === "callmod" && ws.room) {
+            doCallMod(ws);
         } else if (m.t === "cmd" && ws.room && ws.role) {
             // staff tools: re-checked here on every command, the client is never trusted
-            const now = Date.now(); if (now - ws.lc < 150) return; ws.lc = now;
+            const now = Date.now(); if (now - ws.lc < (isStaff(ws) ? 150 : 900)) return; ws.lc = now;
             const R = ws.room, me = R.m.get(ws.id); if (!me) return;
             const k = str(m.k, 12), O = ws.role === "owner";
+            if (!isStaff(ws)) {   // content creators: a few harmless troll effects, on ordinary players only (never staff or other creators)
+                if (!["launch", "rocket", "lowgrav", "slow", "invert", "freeze"].includes(k)) return;
+                const tp = R.m.get(str(m.to, 12)); if (!tp || tp.ws === ws || tp.ws.role) return;
+                tp.cs.fx = Date.now(); tp.ws.send(JSON.stringify({ t: "fx", k, x: me.s.x, y: me.s.y })); return;
+            }
             if (k === "undercover") {   // any staff: look like a normal player (no role tag, no staff items, random common name)
                 const on = m.on === 1 || m.on === true;
                 if (on && !ws.uc) { ws.uc = 1; ws.ucn = pickName(R); me.s.n = ws.ucn; } else if (!on) { ws.uc = 0; me.s.n = me.rn; }
@@ -557,6 +610,12 @@ wss.on("connection", (ws, req) => {
                 if (k === "unmod" && tp.ws.role !== "mod") return;
                 if (k === "mod") { ROLE.set(tp.ws.uh, "mod"); tp.ws.role = "mod"; }
                 else { ROLE.delete(tp.ws.uh); tp.ws.role = ""; if (tp.ws.uc) { tp.ws.uc = 0; tp.s.n = tp.rn; tp.ws.send(JSON.stringify({ t: "ev", k: "uc", on: 0, name: "" })); } }
+                saveStaff();
+            }
+            else if (k === "creator" || k === "uncreator") {   // owner makes / removes content creators live; saved in staff.json
+                if (!O || !tp.ws.uh || tp.ws === ws || isStaff(tp.ws) || CFG.has(tp.ws.uh)) return;
+                if (k === "uncreator" && tp.ws.role !== "creator") return;
+                if (k === "creator") { ROLE.set(tp.ws.uh, "creator"); tp.ws.role = "creator"; } else { ROLE.delete(tp.ws.uh); tp.ws.role = ""; }
                 saveStaff();
             }
             else apply(tp);
