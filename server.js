@@ -1,4 +1,4 @@
-﻿// goril server: serves index.html and runs multiplayer rooms over WebSocket.
+// goril server: serves index.html and runs multiplayer rooms over WebSocket.
 // Run: npm install && npm start   (then open http://localhost:3000)
 const http = require("http"), fs = require("fs"), path = require("path"), crypto = require("crypto");
 const { WebSocketServer } = require("ws");
@@ -8,6 +8,21 @@ const MAX_PER_IP = +process.env.MAX_PER_IP || 8;   // simultaneous connections p
 const MAX_ROOMS = 300;
 
 let cfg = {}; try { cfg = JSON.parse(fs.readFileSync(path.join(__dirname, "config.json"), "utf8")); } catch (e) { }
+
+/* ===================== DATA FOLDER =====================
+   Everything that must survive updates (profiles, grants, bans, staff, stats) lives in ONE folder.
+   Default: ./data next to server.js.  Override with DATA_DIR=/some/persistent/path
+   IMPORTANT when hosting (Render/Railway/etc): point DATA_DIR at a persistent disk/volume, otherwise redeploys wipe it. */
+const DATA = process.env.DATA_DIR || path.join(__dirname, "data");
+try { fs.mkdirSync(DATA, { recursive: true }); } catch (e) { console.log("could not create data folder: " + e.message); }
+const dp = f => path.join(DATA, f);
+["grants.json", "bans.json", "staff.json"].forEach(f => { try { if (!fs.existsSync(dp(f)) && fs.existsSync(path.join(__dirname, f))) fs.copyFileSync(path.join(__dirname, f), dp(f)); } catch (e) { } });   // one-time move of the old files
+const readJSON = (f, d) => { try { const v = JSON.parse(fs.readFileSync(f, "utf8")); return v == null ? d : v; } catch (e) { return d; } };
+const writeJSON = (f, o) => { try { fs.writeFileSync(f + ".tmp", JSON.stringify(o)); fs.renameSync(f + ".tmp", f); } catch (e) { console.log("could not write " + path.basename(f) + ": " + e.message); } };
+/* ======================================================== */
+
+const ADMIN_KEY = process.env.ADMIN_KEY || cfg.ADMIN_KEY;
+/* ================================================================ */
 
 /* ===================== STAFF LIST (server-side only) =====================
    1. Open the game, walk to the lobby computer, press "Show" under "Your player ID".
@@ -40,14 +55,18 @@ const addIds = (list, r) => list.forEach(i => { const n = norm(i); if (n.length 
 addIds(STAFF_IDS.owner, "owner"); addIds(STAFF_IDS.mod, "mod");
 addIds((process.env.OWNER_IDS || "").split(","), "owner"); addIds((process.env.MOD_IDS || "").split(","), "mod");
 const CFG = new Set(ROLE.keys());   // staff set in this file / env vars (not editable in-game)
-const STF = path.join(__dirname, "staff.json");   // moderators promoted in-game by the owner (hashed IDs)
-try { JSON.parse(require("fs").readFileSync(STF, "utf8")).forEach(h => { if (!ROLE.has(h)) ROLE.set(h, "mod"); }); } catch (e) { }
-const saveStaff = () => { try { require("fs").writeFileSync(STF, JSON.stringify([...ROLE].filter(([h, r]) => r === "mod" && !CFG.has(h)).map(x => x[0]))); } catch (e) { } };
+const STF = dp("staff.json");   // staff promoted in-game / from the dashboard (hashed IDs). Old format (array of mods) still loads.
+{
+    const sj = readJSON(STF, []);
+    const mods = Array.isArray(sj) ? sj : (sj.mod || []), owners = Array.isArray(sj) ? [] : (sj.owner || []);
+    mods.forEach(h => { if (!ROLE.has(h)) ROLE.set(h, "mod"); }); owners.forEach(h => { if (!ROLE.has(h)) ROLE.set(h, "owner"); });
+}
+const saveStaff = () => writeJSON(STF, { owner: [...ROLE].filter(([h, r]) => r === "owner" && !CFG.has(h)).map(x => x[0]), mod: [...ROLE].filter(([h, r]) => r === "mod" && !CFG.has(h)).map(x => x[0]) });
 const RANK = { owner: 2, mod: 1, "": 0 };
 console.log("Staff loaded: " + [...ROLE.values()].filter(r => r === "owner").length + " owner(s), " + [...ROLE.values()].filter(r => r === "mod").length + " mod(s)");
 
 // bans are stored as hashed IDs in bans.json (delete an entry to unban)
-const BANF = path.join(__dirname, "bans.json");
+const BANF = dp("bans.json");
 let bans = new Set(); try { bans = new Set(JSON.parse(fs.readFileSync(BANF, "utf8"))); } catch (e) { }
 const saveBans = () => { try { fs.writeFileSync(BANF, JSON.stringify([...bans])); } catch (e) { } };
 
@@ -68,7 +87,7 @@ const REG_IDS = new Set(Object.values(SLOTS).flat());          // items that can
 const SLOT_OK = {}; for (const k in SLOTS) SLOT_OK[k] = new Set(SLOTS[k].concat(STAFF_SLOTS[k] || []));
 
 // grants.json: items the OWNER gave to players, keyed by sha256(player id). Only the server writes it.
-const GRF = path.join(__dirname, "grants.json");
+const GRF = dp("grants.json");
 let grants = {}; try { const g = JSON.parse(fs.readFileSync(GRF, "utf8")); if (g && typeof g === "object") grants = g; } catch (e) { }
 const saveGrants = () => { try { fs.writeFileSync(GRF + ".tmp", JSON.stringify(grants)); fs.renameSync(GRF + ".tmp", GRF); } catch (e) { console.log("could not save grants.json: " + e.message); } };
 const gl = uh => (uh && Array.isArray(grants[uh])) ? grants[uh].filter(i => REG_IDS.has(i)) : [];
@@ -90,6 +109,15 @@ const pickName = R => {
 const dn = p => p.ws.uc ? p.ws.ucn : p.s.n;       // the name everyone else is allowed to see
 
 const server = http.createServer((req, res) => {
+    const u = String(req.url || "/").split("?")[0];
+    if (u.startsWith("/admin/api/")) return adminApi(req, res, u.slice(11));
+    if (u === "/admin" || u === "/admin/") {
+        return fs.readFile(path.join(__dirname, "admin.html"), (e, b) => {
+            if (e) { res.writeHead(404); return res.end("admin.html missing"); }
+            res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store", "X-Frame-Options": "DENY", "Referrer-Policy": "no-referrer", "Content-Security-Policy": "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'" });
+            res.end(b);
+        });
+    }
     fs.readFile(path.join(__dirname, "index.html"), (e, b) => {
         if (e) { res.writeHead(500); return res.end("index.html missing"); }
         res.writeHead(200, {
@@ -107,6 +135,177 @@ const str = (v, n) => String(v == null ? "" : v).slice(0, n);
 const cleanName = (v, n) => str(v, n).replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2066-\u2069]/g, "").trim();   // no control / bidi-override tricks in names
 const bc = (R, o) => { const j = JSON.stringify(o); R.m.forEach(p => p.ws.readyState === 1 && p.ws.send(j)); };
 const FX = ["launch", "freeze", "invert", "lowgrav", "goto", "slow", "rocket", "home"];
+
+/* ---------- PLAYER PROFILES (the "saving thing") ----------
+   One record per player, keyed by sha256(player ID): name, fur color, coins, candy, owned + equipped cosmetics, first/last seen, logins, playtime.
+   The game client loads it when it connects, so a new .exe build no longer wipes anything as long as the player ID stays the same
+   (and if the ID does change, "Restore old account" in the menu or "Link" in the dashboard moves the old profile to the new ID). */
+const PRICE = { "beanie": { "p": 20, "lk": 0 }, "party": { "p": 30, "lk": 0 }, "cowboy": { "p": 50, "lk": 0 }, "top": { "p": 70, "lk": 0 }, "prop": { "p": 90, "lk": 0 }, "halo": { "p": 120, "lk": 0 }, "crown": { "p": 200, "lk": 0 }, "wiz": { "p": 150, "lk": 0 }, "horns": { "p": 110, "lk": 0 }, "witch": { "p": 90, "lk": 0 }, "pumpkin": { "p": 110, "lk": 0 }, "mummy": { "p": 80, "lk": 0 }, "skullcap": { "p": 70, "lk": 0 }, "gpump": { "p": 0, "lk": 60 }, "shades": { "p": 25, "lk": 0 }, "monocle": { "p": 40, "lk": 0 }, "stache": { "p": 45, "lk": 0 }, "nose": { "p": 60, "lk": 0 }, "visor": { "p": 80, "lk": 0 }, "vamp": { "p": 50, "lk": 0 }, "stitch": { "p": 40, "lk": 0 }, "skullmask": { "p": 90, "lk": 0 }, "pack": { "p": 30, "lk": 0 }, "cape": { "p": 80, "lk": 0 }, "wings": { "p": 150, "lk": 0 }, "jet": { "p": 220, "lk": 0 }, "bat": { "p": 130, "lk": 0 }, "ghost": { "p": 160, "lk": 0 }, "candybag": { "p": 60, "lk": 0 }, "broom": { "p": 100, "lk": 0 }, "scythe": { "p": 0, "lk": 100 }, "spark": { "p": 60, "lk": 0 }, "fire": { "p": 100, "lk": 0 }, "bubble": { "p": 100, "lk": 0 }, "rain": { "p": 180, "lk": 0 }, "star": { "p": 140, "lk": 0 }, "heart": { "p": 140, "lk": 0 }, "bats": { "p": 120, "lk": 0 }, "candy": { "p": 100, "lk": 0 }, "wisp": { "p": 110, "lk": 0 }, "ember": { "p": 90, "lk": 0 }, "witchfire": { "p": 0, "lk": 30 } };
+const PRF = dp("profiles.json"), EVF = dp("events.json"), STATF = dp("stats.json");
+const profiles = readJSON(PRF, {}), events = readJSON(EVF, []), stats = readJSON(STATF, { hist: [] });
+if (!Array.isArray(events)) events.length = 0; if (!Array.isArray(stats.hist)) stats.hist = [];
+let dirty = 0, lastBak = 0;
+const mark = () => { dirty = 1; };
+const logEv = (ty, uh, name, x) => { events.push({ t: Date.now(), ty, ref: uh ? uh.slice(0, 10) : "", full: uh || "", n: str(name, 12), x: x || "" }); while (events.length > 400) events.shift(); mark(); };
+const flush = () => {
+    if (!dirty) return; dirty = 0;
+    writeJSON(PRF, profiles); writeJSON(EVF, events); writeJSON(STATF, stats);
+    const now = Date.now(); if (now - lastBak > 3600000) {            // hourly rolling backups (kept 48h)
+        lastBak = now; try {
+            const bd = path.join(DATA, "backups"); fs.mkdirSync(bd, { recursive: true });
+            fs.copyFileSync(PRF, path.join(bd, "profiles-" + new Date(now).toISOString().slice(0, 13).replace(/[^0-9]/g, "") + ".json"));
+            fs.readdirSync(bd).sort().slice(0, -48).forEach(f => fs.unlinkSync(path.join(bd, f)));
+        } catch (e) { }
+    }
+};
+setInterval(flush, 5000);
+const bye = () => { dirty = 1; flush(); process.exit(0); }; process.on("SIGINT", bye); process.on("SIGTERM", bye);
+
+const SESSION_GAP = 20 * 60 * 1000;   // a reconnect within 20 min (map change) is the same login
+const newProfile = n => ({ n: "Monke", hue: 25, coins: 60, candy: 0, own: {}, eq: { hat: "none", face: "none", back: "none", trail: "none", hand: "none" }, mu: {}, vv: 80, first: n, last: n, ls: n, logins: 1, secs: 0, flags: 0, stub: 1 });
+const cleanEq = e => { const r = { hat: "none", face: "none", back: "none", trail: "none", hand: "none" }; if (e && typeof e === "object") for (const k in r) { const v = str(e[k], 12); if (v && SLOT_OK[k].has(v)) r[k] = v; } return r; };
+const cleanOwn = o => { const r = {}; if (o && typeof o === "object") for (const k of Object.keys(o).slice(0, 200)) if (PRICE[k] && o[k]) r[k] = 1; return r; };
+const cleanMu = o => { const r = {}; if (o && typeof o === "object") for (const k of Object.keys(o).slice(0, 150)) if (/^[a-z0-9]{2,16}$/i.test(k) && o[k]) r[k] = 1; return r; };
+const pubProfile = p => ({ n: p.n, hue: p.hue, coins: p.coins, candy: p.candy, own: p.own, eq: p.eq, mu: p.mu, vv: p.vv });
+const socksOf = uh => [...wss.clients].filter(w => w.uh === uh && w.readyState === 1);
+const pushProfile = uh => { const p = profiles[uh]; if (p) socksOf(uh).forEach(w => w.send(JSON.stringify({ t: "ev", k: "profile", p: p.stub ? null : pubProfile(p), force: 1 }))); };
+const pushFix = uh => { const p = profiles[uh]; if (p) socksOf(uh).forEach(w => w.send(JSON.stringify({ t: "ev", k: "pfix", coins: p.coins, candy: p.candy }))); };
+
+// called when a player connects: count the login, then send their saved profile (or null = "send me yours")
+const onJoin = ws => {
+    if (!ws.uh) return; const n = Date.now(); ws.jt = n; let p = profiles[ws.uh];
+    if (!p) { p = profiles[ws.uh] = newProfile(n); logEv("new", ws.uh, "", ""); }
+    else if (n - p.last > SESSION_GAP) { p.logins++; logEv("login", ws.uh, p.n, ""); }
+    p.last = n; mark();
+    ws.send(JSON.stringify({ t: "ev", k: "profile", p: p.stub ? null : pubProfile(p) }));
+};
+// the player's client sends its state every few seconds; the server checks it against the rules before storing it
+const doSave = (ws, m) => {
+    const uh = ws.uh, pr = profiles[uh], n = Date.now(); if (!uh || !pr || !m.p || typeof m.p !== "object") return;
+    if (n - (ws.sv || 0) < 1000) return; ws.sv = n; const d = m.p, creating = pr.stub;
+    let coins = Math.max(0, Math.min(1e9, num(d.coins))), candy = Math.max(0, Math.min(1e6, num(d.candy))), fix = 0;
+    const own = cleanOwn(d.own), granted = new Set(gl(uh)), newPaid = [];
+    for (const k in own) if (!pr.own[k] && !granted.has(k) && PRICE[k]) newPaid.push(k);
+    if (creating) { coins = Math.min(coins, 100000); candy = Math.min(candy, 5000); }   // first save = importing the progress the player already has
+    else if (ws.role !== "owner") {                         // owners can use their +1000 coins button; everyone else can only gain at a believable rate
+        const dt = Math.min(3600, (n - (pr.ls || n)) / 1000), A = 400 + dt * 12;
+        if (candy > pr.candy + 20 + dt * 3) { candy = Math.floor(pr.candy + 20 + dt * 3); fix = 1; }
+        let cost = 0; for (const k of newPaid) { const it = PRICE[k]; if (it.lk) { if (candy < it.lk) delete own[k]; } else cost += it.p; }
+        let max = pr.coins + A - cost; if (max < 0) { newPaid.forEach(k => { if (!PRICE[k].lk) delete own[k]; }); max = pr.coins + A; }
+        if (coins > max) { coins = Math.max(0, Math.floor(max)); fix = 1; }
+    }
+    if (fix) { pr.flags++; logEv("clamp", uh, pr.n, "coins/candy corrected"); }
+    for (const k in own) if (!pr.own[k]) { pr.own[k] = 1; if (!creating) logEv("buy", uh, pr.n, k); }
+    pr.coins = coins; pr.candy = candy; pr.n = cleanName(d.n, 12) || pr.n || "Monke";
+    pr.hue = Math.max(0, Math.min(360, num(d.hue))); pr.eq = cleanEq(d.eq); pr.mu = cleanMu(d.mu); pr.vv = Math.max(0, Math.min(100, num(d.vv)));
+    pr.ls = n; pr.last = n; if (creating) { pr.stub = 0; logEv("created", uh, pr.n, "imported " + coins + " coins"); } mark();
+    if (fix) ws.send(JSON.stringify({ t: "ev", k: "pfix", coins, candy }));
+};
+
+// move everything from one ID to another (player "Restore old account", or the dashboard "Link" button)
+const moveProfile = (from, to, withRole) => {
+    const op = profiles[from]; if (!op) return false; const tp = profiles[to], n = Date.now();
+    profiles[to] = Object.assign({}, op, { first: Math.min(op.first || n, tp ? tp.first : n), logins: (op.logins || 0) + (tp ? tp.logins : 0), secs: (op.secs || 0) + (tp ? tp.secs : 0), last: n, ls: n, stub: 0 });
+    delete profiles[from];
+    const g = new Set(gl(to).concat(gl(from))); if (g.size) grants[to] = [...g]; delete grants[from]; saveGrants();
+    if (bans.has(from)) { bans.add(to); saveBans(); }
+    if (withRole) {
+        const r = ROLE.get(from); if (r && (RANK[r] > RANK[ROLE.get(to) || ""])) { ROLE.set(to, r); if (!CFG.has(from)) ROLE.delete(from); saveStaff(); socksOf(to).forEach(w => w.role = r); }
+    }
+    logEv("link", to, op.n, "from " + from.slice(0, 10)); mark(); pushProfile(to); socksOf(to).forEach(w => sendGrants(w)); return true;
+};
+const tries = new Map();
+const doRestore = (ws, m, ip) => {
+    const n = Date.now(); if (!ws.uh || n - (ws.rs || 0) < 3000) return; ws.rs = n;
+    const L = (tries.get(ip) || []).filter(t => n - t < 3600000); if (L.length >= 10) return note(ws, "Too many tries - wait an hour."); L.push(n); tries.set(ip, L);
+    const old = norm(m.old); if (old.length !== 32) return note(ws, "That does not look like a player ID.");
+    const oh = sha(old); if (oh === ws.uh) return note(ws, "That is already your current ID.");
+    if (bans.has(oh)) return note(ws, "That account is banned.");
+    if (!profiles[oh] || profiles[oh].stub) return note(ws, "No saved account found for that ID.");
+    moveProfile(oh, ws.uh, false); note(ws, "Account restored! Your coins and cosmetics were moved over.");
+};
+
+// who is online right now (unique players + anonymous connections), used by the dashboard and the history graph
+const onlineInfo = () => {
+    const by = new Map(), rms = {}; let total = 0;
+    for (const w of wss.clients) { if (w.readyState !== 1 || !w.room) continue; total++; rms[w.rname] = (rms[w.rname] || 0) + 1; if (w.uh) by.set(w.uh, { room: w.rname, n: dn(w.room.m.get(w.id) || { ws: w, s: { n: "?" } }) }); }
+    return { total, by, rms };
+};
+setInterval(() => { const o = onlineInfo(); stats.hist.push([Date.now(), o.total]); while (stats.hist.length > 1440) stats.hist.shift(); mark(); }, 60000);
+
+console.log("Data folder: " + DATA + "  (" + Object.keys(profiles).length + " saved profiles)");
+console.log("Admin dashboard: http://localhost:" + PORT + "/admin   key: " + ADMIN_KEY);
+
+/* ---------- ADMIN DASHBOARD API ---------- */
+const adminFails = new Map();
+const ipOf = req => (TRUST_PROXY && String(req.headers["x-forwarded-for"] || "").split(",")[0].trim()) || req.socket.remoteAddress || "?";
+const adminOK = req => {
+    const ip = ipOf(req), n = Date.now(), F = (adminFails.get(ip) || []).filter(t => n - t < 600000);
+    if (F.length >= 10) return 429;
+    const given = String(req.headers.authorization || "").replace(/^Bearer /, "");
+    if (crypto.timingSafeEqual(Buffer.from(sha(given)), Buffer.from(sha(ADMIN_KEY)))) return 200;
+    F.push(n); adminFails.set(ip, F); return 401;
+};
+const adminView = (uh, on) => {
+    const p = profiles[uh], o = on.by.get(uh);
+    return { ref: uh, id: uh.slice(0, 10), n: p.n, coins: p.coins, candy: p.candy, own: Object.keys(p.own), granted: gl(uh), eq: p.eq, first: p.first, last: p.last, logins: p.logins, secs: Math.round(p.secs || 0), flags: p.flags || 0, stub: p.stub ? 1 : 0, role: ROLE.get(uh) || "", cfg: CFG.has(uh) ? 1 : 0, banned: bans.has(uh) ? 1 : 0, online: o ? 1 : 0, room: o ? o.room : "" };
+};
+const findRef = r => { r = String(r || "").toLowerCase(); return /^[a-f0-9]{64}$/.test(r) && profiles[r] ? r : null; };
+const adminApi = (req, res, route) => {
+    const send = (code, o) => { res.writeHead(code, { "Content-Type": "application/json", "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" }); res.end(JSON.stringify(o)); };
+    const st = adminOK(req); if (st !== 200) return send(st, { error: st === 429 ? "Too many wrong keys, wait 10 minutes." : "Wrong key" });
+    let body = ""; req.on("data", c => { body += c; if (body.length > 20000) req.destroy(); });
+    req.on("end", () => {
+        let m = {}; if (body) try { m = JSON.parse(body); } catch (e) { return send(400, { error: "bad json" }); }
+        const on = onlineInfo(), n = Date.now();
+        try {
+            if (route === "overview") {
+                const list = Object.keys(profiles).filter(h => !profiles[h].stub), day = n - 86400000;
+                const h24 = stats.hist.filter(x => x[0] > day), peak = h24.reduce((a, x) => Math.max(a, x[1]), on.total);
+                return send(200, { online: on.total, unique: on.by.size, rooms: on.rms, peak24: peak, total: list.length, new24: list.filter(h => profiles[h].first > day).length, new7: list.filter(h => profiles[h].first > n - 7 * 86400000).length, active24: list.filter(h => profiles[h].last > day).length, hist: stats.hist, events: events.slice(-80).reverse(), coinsTotal: list.reduce((a, h) => a + profiles[h].coins, 0), banned: bans.size, now: n });
+            }
+            if (route === "players") {
+                const q = str(m.q, 40).toLowerCase(); let L = Object.keys(profiles).filter(h => !profiles[h].stub || on.by.has(h));
+                if (q) L = L.filter(h => profiles[h].n.toLowerCase().includes(q) || h.startsWith(q));
+                if (m.only === "online") L = L.filter(h => on.by.has(h)); else if (m.only === "staff") L = L.filter(h => ROLE.get(h)); else if (m.only === "banned") L = L.filter(h => bans.has(h));
+                L.sort((a, b) => m.sort === "coins" ? profiles[b].coins - profiles[a].coins : m.sort === "first" ? profiles[b].first - profiles[a].first : profiles[b].last - profiles[a].last);
+                return send(200, { total: L.length, players: L.slice(0, 300).map(h => adminView(h, on)) });
+            }
+            if (route === "catalog") return send(200, { items: Object.keys(PRICE).map(k => ({ id: k, p: PRICE[k].p, lk: PRICE[k].lk })) });
+            if (route === "announce") { const txt = cleanName(m.txt, 80); if (!txt) return send(400, { error: "empty" }); for (const R of rooms.values()) bc(R, { t: "ev", k: "announce", txt }); logEv("announce", "", "", txt); return send(200, { ok: 1 }); }
+            const uh = findRef(m.ref), p = uh && profiles[uh];
+            if (!p) return send(404, { error: "player not found" });
+            if (route === "give" || route === "revoke") {
+                const item = str(m.item, 12); if (!REG_IDS.has(item)) return send(400, { error: "unknown item" });
+                const L = new Set(gl(uh)); if (route === "give") L.add(item); else L.delete(item);
+                if (L.size) grants[uh] = [...L]; else delete grants[uh]; saveGrants(); socksOf(uh).forEach(w => sendGrants(w, route === "give" ? item : ""));
+                logEv(route, uh, p.n, item); return send(200, { ok: 1 });
+            }
+            if (route === "coins") {
+                const v = Math.max(0, Math.min(1e9, num(m.v))); p.coins = m.mode === "add" ? Math.min(1e9, p.coins + v) : v; p.ls = n; p.stub = 0; if (m.candy != null) p.candy = Math.max(0, Math.min(1e6, num(m.candy)));
+                logEv("coins", uh, p.n, "now " + p.coins); mark(); pushFix(uh); return send(200, { ok: 1 });
+            }
+            if (route === "rename") { const nm = cleanName(m.n, 12); if (!nm) return send(400, { error: "empty" }); p.n = nm; mark(); pushProfile(uh); return send(200, { ok: 1 }); }
+            if (route === "role") {
+                const r = m.role === "owner" || m.role === "mod" ? m.role : ""; if (CFG.has(uh)) return send(400, { error: "This role is set in server.js / env vars - change it there." });
+                if (r) ROLE.set(uh, r); else ROLE.delete(uh); saveStaff();
+                socksOf(uh).forEach(w => { w.role = r; if (!r && w.uc) { w.uc = 0; } }); logEv("role", uh, p.n, r || "none"); return send(200, { ok: 1, note: "Takes effect in-game the next time they change map / reconnect." });
+            }
+            if (route === "ban") {
+                if (m.on) { if (ROLE.get(uh) === "owner") return send(400, { error: "cannot ban an owner" }); bans.add(uh); socksOf(uh).forEach(w => { w.send(JSON.stringify({ t: "ev", k: "banned" })); w.close(); }); } else bans.delete(uh);
+                saveBans(); logEv(m.on ? "ban" : "unban", uh, p.n, ""); return send(200, { ok: 1 });
+            }
+            if (route === "kick") { socksOf(uh).forEach(w => { w.send(JSON.stringify({ t: "ev", k: "kicked" })); w.close(); }); logEv("kick", uh, p.n, ""); return send(200, { ok: 1 }); }
+            if (route === "link") {   // m.ref = OLD profile, m.to = NEW profile (the one the player is using now)
+                const to = findRef(m.to); if (!to || to === uh) return send(400, { error: "pick a different target profile" });
+                moveProfile(uh, to, true); return send(200, { ok: 1 });
+            }
+            if (route === "delete") { if (on.by.has(uh) || ROLE.get(uh)) return send(400, { error: "player is online or staff" }); delete profiles[uh]; delete grants[uh]; saveGrants(); logEv("delete", uh, p.n, ""); mark(); return send(200, { ok: 1 }); }
+            return send(404, { error: "unknown route" });
+        } catch (e) { console.log("[admin] " + e.message); return send(500, { error: "server error" }); }
+    });
+};
+
 
 /* ---------- CHAT / VOICE SIGNALING / CHECK / REPORT / STAFF MUTE ---------- */
 const MUTE_MS = 60 * 60 * 1000, smute = new Map();   // uh -> time the staff mute ends (kept in memory, so rejoining does not escape it)
@@ -249,13 +448,18 @@ wss.on("connection", (ws, req) => {
             ws.room = R; ws.rname = name;
             R.m.set(ws.id, { ws, cs: newCS(), last: Date.now(), rn: "Monke", s: { x: 0, y: 0, vx: 0, vy: 0, f: 1, h: [14, 16, -14, 16], hu: 30, n: "Monke", e: {}, it: 0, tg: 0 } });
             ws.send(JSON.stringify({ t: "hi", id: ws.id, r: ws.role }));
-            sendGrants(ws);
+            sendGrants(ws); onJoin(ws);
+        } else if (m.t === "save" && ws.uh) {
+            doSave(ws, m);
+        } else if (m.t === "restore" && ws.uh) {
+            doRestore(ws, m, ip);
         } else if (m.t === "s" && ws.room) {
             const pl = ws.room.m.get(ws.id); if (!pl) return; pl.last = Date.now(); const s = pl.s, d = m.d || {}, e = d.e || {};
             s.x = num(d.x); s.y = num(d.y); s.vx = num(d.vx); s.vy = num(d.vy);
             s.f = d.f === -1 ? -1 : 1;
             if (Array.isArray(d.h) && d.h.length >= 4) s.h = d.h.slice(0, 4).map(num);
             s.hu = num(d.hu); pl.rn = cleanName(d.n, 12) || "Monke";
+            if (ws.uh && profiles[ws.uh] && profiles[ws.uh].stub) profiles[ws.uh].n = pl.rn;   // new player who has not saved yet: show their name in the dashboard
             s.n = ws.uc ? ws.ucn : pl.rn;                 // undercover staff are always shown with the server-picked name
             // every slot is checked against the server catalog. Staff items need a staff role (checked HERE, not on the client),
             // "st_o*" items are owner-only, and staff items are never shown while undercover.
@@ -332,6 +536,7 @@ wss.on("connection", (ws, req) => {
     });
     ws.on("close", () => {
         const c = (ips.get(ip) || 1) - 1; if (c > 0) ips.set(ip, c); else ips.delete(ip);
+        if (ws.uh && ws.jt && profiles[ws.uh]) { const p = profiles[ws.uh]; p.secs = (p.secs || 0) + Math.min(21600, (Date.now() - ws.jt) / 1000); p.last = Date.now(); mark(); }
         if (!ws.room) return;
         ws.room.m.delete(ws.id);
         if (!ws.room.m.size) rooms.delete(ws.rname);
