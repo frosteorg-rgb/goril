@@ -31,12 +31,8 @@ const ADMIN_KEY = process.env.ADMIN_KEY || cfg.ADMIN_KEY;
    3. Restart the server.
    You can also use env vars instead: OWNER_IDS="id1,id2"  MOD_IDS="id3,id4"
    Roles:  owner = everything (incl. ban, give cosmetics, can act on mods)   mod = kick + troll tools */
-const STAFF_IDS = {
-    owner: ["9715-E5B4-A56A-3145-9F71-D48B-FC0B-3AB0"],
-    mod: [
-        // "PASTE-A-MODERATOR-ID-HERE",
-    ],
-};
+const OWNER_ID = process.env.OWNER_ID
+const MOD_ID = process.env.MOD_ID
 /* ======================================================================== */
 
 /* ===================== DISCORD REPORTS (server-side only) =====================
@@ -45,7 +41,7 @@ const STAFF_IDS = {
    2. Set it as an environment variable (recommended):  DISCORD_WEBHOOK="https://discord.com/api/webhooks/..."
       or paste it between the quotes below. It never reaches players' browsers.
    Keep the channel private and never put the URL in a public repo. (Needs Node 18+.) */
-const WEBHOOK = process.env.DISCORD_WEBHOOK || cfg.DISCORD_WEBHOOK || "https://discord.com/api/webhooks/..";
+const WEBHOOK = process.env.DISCORD_WEBHOOK || cfg.DISCORD_WEBHOOK;
 /* ======================================================================== */
 
 const sha = s => crypto.createHash("sha256").update(s).digest("hex");
