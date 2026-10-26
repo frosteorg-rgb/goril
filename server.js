@@ -48,7 +48,7 @@ const sha = s => crypto.createHash("sha256").update(s).digest("hex");
 const norm = v => String(v == null ? "" : v).toLowerCase().replace(/[^a-f0-9]/g, "");
 const ROLE = new Map();           // sha256(id) -> "owner" | "mod"  (raw IDs are never kept in memory)
 const addIds = (list, r) => list.forEach(i => { const n = norm(i); if (n.length === 32) ROLE.set(sha(n), r); });
-addIds(STAFF_IDS.owner, "owner"); addIds(STAFF_IDS.mod, "mod");
+addIds(OWNER_ID.owner, "owner"); addIds(MOD_ID.mod, "mod");
 addIds((process.env.OWNER_IDS || "").split(","), "owner"); addIds((process.env.MOD_IDS || "").split(","), "mod");
 const CFG = new Set(ROLE.keys());   // staff set in this file / env vars (not editable in-game)
 const STF = dp("staff.json");   // staff promoted in-game / from the dashboard (hashed IDs). Old format (array of mods) still loads.
