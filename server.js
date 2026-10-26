@@ -61,9 +61,11 @@ addIds(STAFF_IDS.owner || [], "owner"); addIds(STAFF_IDS.mod || [], "mod");
 addIds(envList("OWNER_ID", "OWNER_IDS"), "owner"); addIds(envList("MOD_ID", "MOD_IDS"), "mod");
 const CFG = new Set(ROLE.keys());   // staff set in this file / env vars (not editable in-game)
 const STF = dp("staff.json");   // staff promoted in-game / from the dashboard (hashed IDs). Old format (array of mods) still loads.
-{ const sj = readJSON(STF, []);
-  const mods = Array.isArray(sj) ? sj : (sj.mod || []), owners = Array.isArray(sj) ? [] : (sj.owner || []);
-  mods.forEach(h => { if (!ROLE.has(h)) ROLE.set(h, "mod"); }); owners.forEach(h => { if (!ROLE.has(h)) ROLE.set(h, "owner"); }); }
+{
+    const sj = readJSON(STF, []);
+    const mods = Array.isArray(sj) ? sj : (sj.mod || []), owners = Array.isArray(sj) ? [] : (sj.owner || []);
+    mods.forEach(h => { if (!ROLE.has(h)) ROLE.set(h, "mod"); }); owners.forEach(h => { if (!ROLE.has(h)) ROLE.set(h, "owner"); });
+}
 const saveStaff = () => writeJSON(STF, { owner: [...ROLE].filter(([h, r]) => r === "owner" && !CFG.has(h)).map(x => x[0]), mod: [...ROLE].filter(([h, r]) => r === "mod" && !CFG.has(h)).map(x => x[0]) });
 const RANK = { owner: 2, mod: 1, "": 0 };
 if (![...ROLE.values()].includes("owner")) console.log("WARNING: no owner is set. Set the OWNER_ID environment variable to your player ID (menu > Show), then restart.");
@@ -76,10 +78,10 @@ const saveBans = () => { try { fs.writeFileSync(BANF, JSON.stringify([...bans]))
 
 /* ---------- COSMETIC CATALOG (server copy: anything not listed here is rejected) ---------- */
 const SLOTS = {
-    hat: ["beanie", "party", "cowboy", "top", "prop", "halo", "crown", "wiz", "horns", "witch", "pumpkin", "mummy", "skullcap", "gpump"],
+    hat: ["beanie", "party", "cowboy", "top", "prop", "halo", "crown", "wiz", "horns", "witch", "pumpkin", "mummy", "skullcap", "gpump", "cc_cap"],
     face: ["shades", "monocle", "stache", "nose", "visor", "vamp", "stitch", "skullmask"],
-    back: ["pack", "cape", "wings", "jet", "bat", "ghost", "candybag", "broom", "scythe"],
-    trail: ["spark", "fire", "bubble", "rain", "star", "heart", "bats", "candy", "wisp", "ember", "witchfire"],
+    back: ["pack", "cape", "wings", "jet", "bat", "ghost", "candybag", "broom", "scythe", "cc_cam"],
+    trail: ["spark", "fire", "bubble", "rain", "star", "heart", "bats", "candy", "wisp", "ember", "witchfire", "cc_sub"],
     hand: [],
 };
 // staff-only cosmetics. "st_o*" = owner only, the rest = any staff. "st_stick" is THE STICK (staff badge item).
@@ -144,7 +146,7 @@ const FX = ["launch", "freeze", "invert", "lowgrav", "goto", "slow", "rocket", "
    One record per player, keyed by sha256(player ID): name, fur color, coins, candy, owned + equipped cosmetics, first/last seen, logins, playtime.
    The game client loads it when it connects, so a new .exe build no longer wipes anything as long as the player ID stays the same
    (and if the ID does change, "Restore old account" in the menu or "Link" in the dashboard moves the old profile to the new ID). */
-const PRICE = {"beanie":{"p":20,"lk":0},"party":{"p":30,"lk":0},"cowboy":{"p":50,"lk":0},"top":{"p":70,"lk":0},"prop":{"p":90,"lk":0},"halo":{"p":120,"lk":0},"crown":{"p":200,"lk":0},"wiz":{"p":150,"lk":0},"horns":{"p":110,"lk":0},"witch":{"p":90,"lk":0},"pumpkin":{"p":110,"lk":0},"mummy":{"p":80,"lk":0},"skullcap":{"p":70,"lk":0},"gpump":{"p":0,"lk":60},"shades":{"p":25,"lk":0},"monocle":{"p":40,"lk":0},"stache":{"p":45,"lk":0},"nose":{"p":60,"lk":0},"visor":{"p":80,"lk":0},"vamp":{"p":50,"lk":0},"stitch":{"p":40,"lk":0},"skullmask":{"p":90,"lk":0},"pack":{"p":30,"lk":0},"cape":{"p":80,"lk":0},"wings":{"p":150,"lk":0},"jet":{"p":220,"lk":0},"bat":{"p":130,"lk":0},"ghost":{"p":160,"lk":0},"candybag":{"p":60,"lk":0},"broom":{"p":100,"lk":0},"scythe":{"p":0,"lk":100},"spark":{"p":60,"lk":0},"fire":{"p":100,"lk":0},"bubble":{"p":100,"lk":0},"rain":{"p":180,"lk":0},"star":{"p":140,"lk":0},"heart":{"p":140,"lk":0},"bats":{"p":120,"lk":0},"candy":{"p":100,"lk":0},"wisp":{"p":110,"lk":0},"ember":{"p":90,"lk":0},"witchfire":{"p":0,"lk":30}};
+const PRICE = { "beanie": { "p": 20, "lk": 0 }, "party": { "p": 30, "lk": 0 }, "cowboy": { "p": 50, "lk": 0 }, "top": { "p": 70, "lk": 0 }, "prop": { "p": 90, "lk": 0 }, "halo": { "p": 120, "lk": 0 }, "crown": { "p": 200, "lk": 0 }, "wiz": { "p": 150, "lk": 0 }, "horns": { "p": 110, "lk": 0 }, "witch": { "p": 90, "lk": 0 }, "pumpkin": { "p": 110, "lk": 0 }, "mummy": { "p": 80, "lk": 0 }, "skullcap": { "p": 70, "lk": 0 }, "gpump": { "p": 0, "lk": 60 }, "shades": { "p": 25, "lk": 0 }, "monocle": { "p": 40, "lk": 0 }, "stache": { "p": 45, "lk": 0 }, "nose": { "p": 60, "lk": 0 }, "visor": { "p": 80, "lk": 0 }, "vamp": { "p": 50, "lk": 0 }, "stitch": { "p": 40, "lk": 0 }, "skullmask": { "p": 90, "lk": 0 }, "pack": { "p": 30, "lk": 0 }, "cape": { "p": 80, "lk": 0 }, "wings": { "p": 150, "lk": 0 }, "jet": { "p": 220, "lk": 0 }, "bat": { "p": 130, "lk": 0 }, "ghost": { "p": 160, "lk": 0 }, "candybag": { "p": 60, "lk": 0 }, "broom": { "p": 100, "lk": 0 }, "scythe": { "p": 0, "lk": 100 }, "spark": { "p": 60, "lk": 0 }, "fire": { "p": 100, "lk": 0 }, "bubble": { "p": 100, "lk": 0 }, "rain": { "p": 180, "lk": 0 }, "star": { "p": 140, "lk": 0 }, "heart": { "p": 140, "lk": 0 }, "bats": { "p": 120, "lk": 0 }, "candy": { "p": 100, "lk": 0 }, "wisp": { "p": 110, "lk": 0 }, "ember": { "p": 90, "lk": 0 }, "witchfire": { "p": 0, "lk": 30 } };
 const PRF = dp("profiles.json"), EVF = dp("events.json"), STATF = dp("stats.json");
 const profiles = readJSON(PRF, {}), events = readJSON(EVF, []), stats = readJSON(STATF, { hist: [] });
 if (!Array.isArray(events)) events.length = 0; if (!Array.isArray(stats.hist)) stats.hist = [];
@@ -486,6 +488,7 @@ wss.on("connection", (ws, req) => {
             // "st_o*" items are owner-only, and staff items are never shown while undercover.
             const ok = (slot, v) => {
                 v = str(v, 12); if (v === "" || v === "none") return v; if (!SLOT_OK[slot].has(v)) { badItem(pl); return ""; }
+                if (v.startsWith("cc_")) { if (ws.role || (ws.uh && gl(ws.uh).includes(v))) return v; badItem(pl); return ""; }   // content creator items: only if the owner gave them to this player
                 if (!v.startsWith("st_")) return v;
                 if (!ws.role || ws.uc) { if (!ws.role) badItem(pl); return ""; } return v.startsWith("st_o") && ws.role !== "owner" ? "" : v;
             };
