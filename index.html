@@ -366,6 +366,125 @@
             box-shadow: 4px 4px 0 #2a1448
         }
     </style>
+    <style>
+        #p {
+            width: 360px
+        }
+
+            #p .bd {
+                padding: 10px 14px 12px
+            }
+
+            #p .sec {
+                margin: 12px 0 5px;
+                font-size: 11px;
+                font-weight: bold;
+                letter-spacing: 2px;
+                color: #6b5236;
+                border-bottom: 2px dashed #3a2a1c40
+            }
+
+            #p .row {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 6px
+            }
+
+            #p input[type=text] {
+                margin: 0 0 8px
+            }
+
+            #p #sw {
+                margin: 2px 0 4px
+            }
+
+            #p details summary {
+                cursor: pointer;
+                margin-top: 12px;
+                font-size: 11px;
+                font-weight: bold;
+                letter-spacing: 2px;
+                color: #6b5236
+            }
+
+            #p small {
+                display: block;
+                margin-top: 4px;
+                font-size: 10px
+            }
+
+        #cr {
+            position: fixed;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 300px;
+            max-width: 96%;
+            max-height: 90vh;
+            overflow: auto;
+            background: #2a0f12;
+            color: #eee;
+            font-family: "Courier New",monospace;
+            border: 3px solid #ff4d4d;
+            box-shadow: 5px 5px 0 #000;
+            z-index: 6
+        }
+
+            #cr[hidden] {
+                display: none
+            }
+
+            #cr .tb {
+                background: #c62828;
+                border-bottom-color: #ff4d4d
+            }
+
+            #cr .bd {
+                padding: 8px 12px 12px
+            }
+
+            #cr h4 {
+                margin: 10px 0 3px;
+                color: #ff7a7a;
+                font-size: 12px;
+                letter-spacing: 2px
+            }
+
+            #cr button {
+                background: #3d1a1e;
+                color: #eee;
+                border: 2px solid #c62828;
+                margin: 2px;
+                padding: 3px 6px;
+                font: inherit;
+                font-size: 12px;
+                cursor: pointer;
+                box-shadow: none
+            }
+
+                #cr button:hover {
+                    background: #5a2328
+                }
+
+                #cr button.on {
+                    background: #ff4d4d;
+                    color: #111
+                }
+
+            #cr input[type=range] {
+                accent-color: #ff4d4d
+            }
+
+            #cr .pr {
+                border-top: 1px solid #5a2328;
+                padding: 5px 0
+            }
+
+        body.clean #bar, body.clean #tut, body.clean #ch {
+            display: none !important
+        }
+    </style>
 </head>
 <body>
     <canvas id="c"></canvas>
@@ -384,27 +503,47 @@
         <div class="bd"><div id="plc"></div><p class="own">Click a name to see their card.</p></div>
     </div>
     <div id="p" hidden>
-        <div class="tb"><span>MENU</span><span id="xx" style="cursor:pointer">[x]</span></div><div class="bd">
-            <p class="own">Trixie Studios - owner: <b>Trixie</b></p><div>Coins: <b id="coin"></b> <small>(earn them by surviving and tagging)</small></div><div id="hwr" hidden>🍬 Candy: <b id="candy"></b> <small>(collect it on every map - exclusive cosmetics unlock in the Shop at 30 / 60 / 100)</small></div>
-            <label>Name<input type="text" id="nm" maxlength="12"></label>
-            <div>Fur color</div><input type="range" id="hue" min="0" max="360"><div id="sw"></div>
-            <p><small>Cosmetics are sold in the Shop (portal in the lobby). Earn coins by surviving and tagging.</small></p>
-            <div style="margin-top:8px">Play mode</div><div><button id="mo0">Bots (offline)</button><button id="mo1">Online</button></div><input type="text" id="code" maxlength="16" placeholder="room code (share with friends)"><small>Online: same code + same map = same game. Needs the game server running (see server.js).</small>
-            <div style="margin-top:8px">Bots per match: <b id="bn"></b></div><input type="range" id="bots" min="1" max="12">
-            <div style="margin-top:8px">Voice chat <small>(Online only, hear players near you)</small></div><div><button id="vm0">Off</button><button id="vm1">Push-to-talk (V)</button><button id="vm2">Open mic</button></div>
-            <div style="margin-top:6px">Voice volume: <b id="vvn"></b>%</div><input type="range" id="vv" min="0" max="100">
-            <small>Voice connects players directly to each other, so other players in voice can technically see your IP address.</small>
-            <div style="margin-top:6px">Players you muted: <b id="mun">0</b> <button id="umall">Unmute all</button></div>
-            <div style="margin-top:8px">Travel to map</div><div><button data-m="forest">Forest</button><button data-m="city">City</button><button data-m="sky">Sky Islands</button><button data-m="lobby">Lobby</button><button data-m="shop">Shop</button><button data-m="staff" id="mst" hidden>Staff Room</button></div>
-            <div style="margin-top:8px">Your player ID <small>(permanent, tied to this browser - keep it private)</small></div><div><code id="uid" style="word-break:break-all;font-size:12px"></code></div><div><button id="uidb">Show</button><button id="uidc">Copy</button></div>
-            <div style="margin-top:8px"><small>Lost your coins / cosmetics after an update? Go Online, then paste your OLD player ID here:</small></div><input type="text" id="rid" maxlength="48" placeholder="XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX"><div><button id="ridb">Restore old account</button></div>
-            <div style="margin-top:10px"><button id="x">Close (M / Esc)</button></div><p class="own" style="margin-top:10px">made by Trixie, with love and too much banana.</p>
+        <div class="tb"><span>MENU</span><span id="xx" style="cursor:pointer">[x]</span></div>
+        <div class="bd">
+            <div class="row"><span>🪙 <b id="coin"></b></span><div id="hwr" hidden>🍬 <b id="candy"></b></div></div>
+            <input type="text" id="nm" maxlength="12" placeholder="Name">
+            <div id="sw"></div><input type="range" id="hue" min="0" max="360">
+            <div class="sec">PLAY</div>
+            <div><button id="mo0">Bots (offline)</button><button id="mo1">Online</button></div>
+            <input type="text" id="code" maxlength="16" placeholder="Room code" style="margin-top:6px">
+            <div id="botsrow">Bots: <b id="bn"></b><input type="range" id="bots" min="1" max="12"></div>
+            <div class="sec">TRAVEL</div>
+            <div><button data-m="lobby">Lobby</button><button data-m="shop">Shop</button><button data-m="forest">Forest</button><button data-m="city">City</button><button data-m="sky">Sky</button><button data-m="staff" id="mst" hidden>Staff Room</button></div>
+            <div class="sec">VOICE</div>
+            <div><button id="vm0">Off</button><button id="vm1">Push-to-talk</button><button id="vm2">Open mic</button></div>
+            <div class="row" style="margin-top:6px"><span>Volume <b id="vvn"></b>%</span><span>Muted: <b id="mun">0</b> <button id="umall">Clear</button></span></div>
+            <input type="range" id="vv" min="0" max="100">
+            <small>Voice is peer-to-peer, so players in voice can see your IP.</small>
+            <div class="sec">HELP</div>
+            <div><button id="cm">🆘 Call a mod</button><button id="hp">How to play</button></div>
+            <details>
+                <summary>Account</summary>
+                <div style="margin:6px 0"><code id="uid" style="word-break:break-all;font-size:12px"></code></div>
+                <div><button id="uidb">Show</button><button id="uidc">Copy</button></div>
+                <input type="text" id="rid" maxlength="48" placeholder="Old player ID to restore" style="margin-top:6px">
+                <div><button id="ridb">Restore old account</button></div>
+            </details>
+            <div style="margin-top:10px"><button id="x">Close</button></div>
+            <p class="own" style="margin:10px 0 0;text-align:center">made by Trixie, with love and too much banana.</p>
         </div>
     </div>
     <div id="sv" hidden><div class="tb"><span>STAFF VENT - <span id="svr"></span></span><span id="svx" style="cursor:pointer">[x]</span></div><div class="bd"><div id="svt"></div><div id="svc"></div><p class="own">Every action is re-checked by the server against its staff list. Fake clients are ignored.</p></div></div>
+    <div id="cr" hidden>
+        <div class="tb"><span>🎬 CREATOR</span><span id="crx" style="cursor:pointer">[x]</span></div><div class="bd">
+            <h4>CONTENT</h4>
+            <button id="crfp">📷 First-person cam <small>beta (F)</small></button><button id="crcl">🧼 Clean screen (G)</button>
+            <div style="margin-top:6px">Zoom <b id="crzn">100</b>%</div><input type="range" id="crz" min="70" max="160" value="100" style="width:100%">
+            <h4>TROLL</h4><div id="crt"></div>
+        </div>
+    </div>
     <script>
         const cv = document.getElementById("c"), cx = cv.getContext("2d"), $ = i => document.getElementById(i);
-        let W0, H0, Z; function rs() { cv.width = W0 = innerWidth; cv.height = H0 = innerHeight; Z = H0 / 820 } onresize = rs; rs();
+        let W0, H0, Z, ZB; function rs() { cv.width = W0 = innerWidth; cv.height = H0 = innerHeight; Z = ZB = H0 / 820 } onresize = rs; rs();
         let S = { name: "goril", hue: 25, coins: 60, own: {}, eq: { hat: "none", face: "none", back: "none", trail: "none", hand: "none" }, bots: 6, candy: 0 };
         try { Object.assign(S, JSON.parse(localStorage.getItem("gt2d"))) } catch (e) { }
         S.eq = Object.assign({ hat: "none", face: "none", back: "none", trail: "none", hand: "none" }, S.eq);
@@ -434,7 +573,7 @@
             try { if (!ok(window.GORIL_UID) && typeof window.GORIL_SAVEUID == "function") window.GORIL_SAVEUID(id) } catch (e) { }   // desktop app: remember the ID we ended up with, outside the app
             return id
         })();
-        let uidShow = 0, ST = ""; const fmtU = () => UID.toUpperCase().match(/.{4}/g).join("-");
+        let uidShow = 0, ST = "", CR = 0, cro = 0, fpOn = 0, cleanOn = 0, crZoom = 1, crLast = 0; const fmtU = () => UID.toUpperCase().match(/.{4}/g).join("-");
         const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
         const CAT = {
             hat: [["none", "None", 0], ["beanie", "Beanie", 20], ["party", "Party Hat", 30], ["cowboy", "Cowboy", 50], ["top", "Top Hat", 70], ["prop", "Propeller", 90], ["halo", "Halo", 120], ["crown", "Crown", 200], ["wiz", "Wizard Hat", 150], ["horns", "Devil Horns", 110], ["witch", "Witch Hat", 90, 1], ["pumpkin", "Pumpkin Head", 110, 1], ["mummy", "Mummy Wrap", 80, 1], ["skullcap", "Skull Cap", 70, 1], ["gpump", "Golden Pumpkin", 0, 1, 60], ["cc_cap", "Creator Cap", 0, 0, 0, 1]],
@@ -464,7 +603,7 @@
                 W, H, gy, nr: 1, sky: ["#2a2d4a", "#14152a"], gc: "#3a3a52", gt: "#55557a", sp: [[1250, gy - 40]],
                 ent: { city: [230, gy - 40], forest: [2415, gy - 40], shop: [1550, gy - 40], sky: [1770, gy - 680] },   // where you appear when coming back from a map
                 R: [{ x: -60, y: gy, w: W + 120, h: 120, k: "f" }, { x: -60, y: -60, w: W + 120, h: 60, k: "w" }, { x: -60, y: 0, w: 60, h: H, k: "w" }, { x: W, y: 0, w: 60, h: H, k: "w" },
-                { x: 1960, y: P1, w: 600, h: 18, k: "s", o: 1 }, { x: 1700, y: P2, w: 520, h: 18, k: "s", o: 1 },
+                { x: 1960, y: P1, w: 600, h: 18, k: "s", o: 1 }, { x: 0, y: P2, w: 2220, h: 18, k: "s", o: 1 },
                 { x: 2330, y: gy - 420, w: 60, h: 420, k: "ld", hd: 1 },        // ladder up to the display platform
                 { x: 1740, y: gy - 1020, w: 60, h: 400, k: "ld", hd: 1 }],      // ladder up into the sky tunnel
                 P: [{ x: 10, y: gy - 190, w: 150, h: 190, to: "city", l: "🏙 CITY", c: 215, tn: 1, auto: 1, d: -1 },
@@ -479,8 +618,8 @@
                     c.fillStyle = "#ffffff0d"; for (let x = 0; x < W; x += 200) c.fillRect(x, 188, 6, gy - 188); c.fillStyle = "#0004"; c.fillRect(0, 180, W, 8);
                     c.strokeStyle = "#0008"; c.lineWidth = 2; c.beginPath(); for (let x = 0; x <= W; x += 20) c.lineTo(x, 40 + Math.sin(x / 90) * 14); c.stroke();
                     for (let x = 20; x < W; x += 60) { c.fillStyle = HW ? ((x / 60 | 0) % 2 ? "#ff8a1a" : "#a64dff") : `hsl(${(x * 3 + t * 60) % 360},90%,62%)`; c.beginPath(); c.arc(x, 44 + Math.sin(x / 90) * 14, 5, 0, 7); c.fill() }
-                    c.fillStyle = HW ? `hsl(${24 + Math.sin(t * 2) * 12},100%,58%)` : `hsl(${t * 40 % 360},90%,70%)`; c.shadowColor = c.fillStyle; c.shadowBlur = 25; c.font = "bold 120px Courier New"; c.fillText("goril", 1100, gy - 520); c.shadowBlur = 0;
-                    c.fillStyle = "#fff8"; c.font = "bold 20px Courier New"; c.fillText(HW ? "the tag game: -  by Trixie Studios" : "the tag game  -  by Trixie Studios", 1100, gy - 478);
+                    c.fillStyle = HW ? `hsl(${24 + Math.sin(t * 2) * 12},100%,58%)` : `hsl(${t * 40 % 360},90%,70%)`; c.shadowColor = c.fillStyle; c.shadowBlur = 25; c.font = "bold 120px Courier New"; c.fillText("goril", 1100, gy - 495); c.shadowBlur = 0;
+                    c.fillStyle = "#fff8"; c.font = "bold 20px Courier New"; c.fillText(HW ? "the tag game: -  by Trixie Studios" : "the tag game  -  by Trixie Studios", 1100, gy - 455);
                     c.fillStyle = "#4a4a6e"; c.fillRect(1030, gy - 30, 140, 30); c.fillStyle = "#6a6a9a"; c.fillRect(1030, gy - 30, 140, 6); c.fillStyle = "#5a5a82"; c.fillRect(1090, gy - 96, 20, 66); c.fillStyle = "#8fd8ff";
                     for (let i = 0; i < 12; i++) { const a = (t * 1.2 + i / 12) % 1, d = i % 2 ? 1 : -1; c.globalAlpha = .9; c.beginPath(); c.arc(1100 + d * a * 52, gy - 98 - 60 * Math.sin(Math.PI * a) + a * 64, 3.2, 0, 7); c.fill() } c.globalAlpha = 1;
                     // ladder hint
@@ -583,7 +722,7 @@
         const HW = (() => { const q = new URLSearchParams(location.search).get("halloween"); if (q != null) return q != "0"; const d = new Date(); return d.getMonth() == 9 || (d.getMonth() == 10 && d.getDate() <= 7) })();
         if (HW) document.body.classList.add("hw");
         let GR = {}; const CN = {}; for (const c in CAT) CAT[c].forEach(i => CN[i[0]] = i[1]);   // GR = items the OWNER gave this player (sent by the server)
-        const has = x => (x.p == 0 && !x.lk && !x.gr) || S.own[x.id] || GR[x.id];
+        const has = x => (x.p == 0 && !x.lk && !x.gr) || S.own[x.id] || GR[x.id] || (x.gr && CR);
         const CANDY_COL = ["#ff4d8d", "#4dd2ff", "#ffd23f", "#9b5cff"], HWSTARS = Array.from({ length: 90 }, () => [Math.random(), Math.random() * .65, Math.random() * 1.6 + .6, Math.random() * 6]);
         const HWL = []; for (const c in CAT) CAT[c].forEach(it => { if (it[4]) HWL.push({ id: it[0], n: it[1], lk: it[4] }) });
         let scare = 0;
@@ -1029,20 +1168,24 @@
             c.restore(); c.restore();
             c.fillStyle = "#d9b38c"; c.strokeStyle = dk; c.lineWidth = 2; g.h.forEach(h => { c.beginPath(); c.arc(h.x, h.y, 7, 0, 7); c.fill(); c.stroke() });
             if (e.hand == "st_stick") { const h = g.h[0]; c.save(); c.translate(h.x, h.y); c.rotate(f * .35); c.fillStyle = "#e9dfc4"; c.fillRect(-2.5, -60, 5, 70); c.fillStyle = "#8a6a3a"; c.fillRect(-2.5, -4, 5, 14); c.fillRect(-2.5, -30, 5, 3); c.shadowColor = "#ffd23f"; c.shadowBlur = 10; c.fillStyle = "#ffd23f"; c.beginPath(); c.arc(0, -62, 4.5, 0, 7); c.fill(); c.shadowBlur = 0; c.restore() }
-            const rr = g == me && ucOn ? "" : g.r; c.fillStyle = rr == "owner" ? "#ffd23f" : rr == "mod" ? "#4fc3ff" : g.it ? "#ff6b6b" : "#fff"; c.font = "bold 14px sans-serif"; c.textAlign = "center"; c.fillText(g.nn ? "" : (rr == "owner" ? "[OWNER] " : rr == "mod" ? "[MOD] " : "") + g.name + (g.it ? (HW ? " 🧟" : " 🔥") : ""), 0, -42); drawFx(c, g); c.restore()
+            const rr = g == me && ucOn ? "" : g.r; c.fillStyle = rr == "owner" ? "#ffd23f" : rr == "mod" ? "#4fc3ff" : rr == "creator" ? "#ff5c5c" : g.it ? "#ff6b6b" : "#fff"; c.font = "bold 14px sans-serif"; c.textAlign = "center"; c.fillText(g.nn ? "" : (rr == "owner" ? "[OWNER] " : rr == "mod" ? "[MOD] " : rr == "creator" ? "[CREATOR] " : "") + g.name + (g.it ? (HW ? " 🧟" : " 🔥") : ""), 0, -42); drawFx(c, g); c.restore()
+        }
+        function drawHands(c, g) {   // first-person cam: you only see your own arms
+            c.save(); c.translate(g.x, g.y); c.lineCap = "round"; const dk = `hsl(${g.hue},50%,28%)`; c.strokeStyle = dk; c.lineWidth = 8; g.h.forEach(h => { c.beginPath(); c.moveTo(0, -2); c.lineTo(h.x, h.y); c.stroke() });
+            c.fillStyle = "#d9b38c"; c.lineWidth = 2; g.h.forEach(h => { c.beginPath(); c.arc(h.x, h.y, 7, 0, 7); c.fill(); c.stroke() }); c.restore()
         }
         function frame(t) {
-            const dt = Math.min(.033, (t - last) / 1000); last = t; tick(dt); vcTick(); pfTick(); $("sb").hidden = !ST;
-            const vw = W0 / Z, vh = 820; cam.x += (Math.max(0, Math.min(M.W - vw, me.x - vw / 2)) - cam.x) * Math.min(1, dt * 8); cam.y += (Math.max(0, Math.min(M.H - vh, me.y - vh / 2)) - cam.y) * Math.min(1, dt * 8);
+            const dt = Math.min(.033, (t - last) / 1000); last = t; tick(dt); vcTick(); pfTick(); $("sb").hidden = !(ST || CR); if (ST || CR) { const l = ST ? "🛡 Staff (Q)" : "🎬 Creator (Q)"; if ($("sb").textContent != l) $("sb").textContent = l } if (!CR && cro) crT(0); if (!(ST || CR)) { if (fpOn) fpT(0); if (cleanOn) cleanT(0); crZoom = 1 }
+            Z = ZB * (fpOn ? 2.4 : crZoom); const vw = W0 / Z, vh = H0 / Z, lead = fpOn ? me.f * vw * .22 : 0, ck = Math.min(1, dt * (fpOn ? 16 : 8)); cam.x += (Math.max(0, Math.min(M.W - vw, me.x + lead - vw / 2)) - cam.x) * ck; cam.y += (Math.max(0, Math.min(M.H - vh, me.y - vh / 2)) - cam.y) * ck;
             bg(); const c = cx; c.save(); c.scale(Z, Z); c.translate(-cam.x, -cam.y);
             if (M.pre) M.pre(c); if (M.D) M.D.forEach(d => { c.fillStyle = "#1f6b35cc"; c.beginPath(); c.arc(d.x, d.y, d.r, 0, 7); c.fill(); c.fillStyle = "#2e8b45aa"; c.beginPath(); c.arc(d.x - 30, d.y - 20, d.r * .7, 0, 7); c.fill() });
             R.forEach(b => { if (b.x + b.w > cam.x - 50 && b.x < cam.x + vw + 50) dR(b) }); if (HW) hwWorld(c, vw);
             M.P.forEach(portal); if (M.V) drawVent(M.V); if (M.dec) M.dec(c);
             parts.forEach(p => { c.globalAlpha = p.l; c.fillStyle = p.c; c.beginPath(); c.arc(p.x, p.y, p.s, 0, 7); c.fill() }); c.globalAlpha = 1;
-            G.forEach(g => g != me && drawG(g)); drawG(me);
+            G.forEach(g => g != me && drawG(g)); if (fpOn) drawHands(c, me); else drawG(me);
 
             c.restore();
-            if (HW) hwFront(); drawChat(c); hudV(c); c.fillStyle = "#fff"; c.font = "bold 17px sans-serif"; c.textAlign = "left"; c.fillText("🪙 " + S.coins + (HW ? "   🍬 " + (S.candy | 0) + (M.cy && M.cy.length ? " (" + M.cy.filter(q => !q.g).length + " here)" : "") : "") + "   📍 " + M.n.toUpperCase() + "   " + (me.it ? "🔥 YOU ARE IT" : "") + (RM ? "   🌐 " + (S.code || "public") + " (" + (Object.keys(OG).length + 1) + " players)" : S.online ? "   🌐 connecting..." : ""), 16, 28);
+            if (HW) hwFront(); if (cleanOn) return requestAnimationFrame(frame); drawChat(c); hudV(c); c.fillStyle = "#fff"; c.font = "bold 17px sans-serif"; c.textAlign = "left"; c.fillText("🪙 " + S.coins + (HW ? "   🍬 " + (S.candy | 0) + (M.cy && M.cy.length ? " (" + M.cy.filter(q => !q.g).length + " here)" : "") : "") + "   📍 " + M.n.toUpperCase() + "   " + (me.it ? "🔥 YOU ARE IT" : "") + (RM ? "   🌐 " + (S.code || "public") + " (" + (Object.keys(OG).length + 1) + " players)" : S.online ? "   🌐 connecting..." : ""), 16, 28);
             c.textAlign = "center"; c.font = "bold 20px sans-serif";
             if (!M.nr) { const inf = G.filter(g => g.it).length; c.fillText(RM && G.length < 2 ? "Waiting for other players... (share your room code)" : rd.st == "wait" ? "Infection in " + Math.ceil(rd.t) : rd.st == "end" ? "Round over" : "Time " + (rd.t | 0) + "s   Infected " + inf + "/" + G.length, W0 / 2, 28) }
             if (!M.nr) { const mw = 180, mh = mw * M.H / M.W, mx = 12, my = H0 - mh - 36; c.fillStyle = "#0008"; c.fillRect(mx, my, mw, mh); R.forEach(b => { if (b.k != "w") { c.fillStyle = "#889"; c.fillRect(mx + b.x / M.W * mw, my + b.y / M.H * mh, Math.max(1, b.w / M.W * mw), Math.max(1, b.h / M.H * mh)) } }); G.forEach(g => { c.fillStyle = g == me ? "#4f4" : g.it ? "#f44" : "#fff"; c.fillRect(mx + g.x / M.W * mw - 2, my + g.y / M.H * mh - 2, 4, 4) }); c.textAlign = "right"; c.font = "14px sans-serif"; c.fillStyle = "#fff";[...G].sort((a, b) => (b.tg || 0) - (a.tg || 0)).slice(0, 4).forEach((g, i) => c.fillText(g.name + " " + (g.tg || 0) + " tags", W0 - 12, 28 + i * 18)); c.textAlign = "center" }
@@ -1055,8 +1198,8 @@
         onkeydown = e => {
             if (document.activeElement.tagName == "INPUT" && document.activeElement.type == "text") return; const k = e.key.toLowerCase(); keys[k] = 1; if (k == " " || k.startsWith("arrow")) e.preventDefault();
             if (k == "e") { if (op) tog(0); else if (M.n == "shop" && nearItem()) shopUse(); else if (nearV()) useVent() }
-            if (k == "m") tog(op ? 0 : 1); if (k == "q" && ST) svT(!sop); if (k == "u" && ST && !op) ucToggle()
-            if (k == "escape") { tog(0); svT(0) } if (k == "r") { if (M.nr) place(me); else say("Respawn only works in the lobby!") } if (k == "l" && !op) load("lobby"); if (k == "h") tut(0); if (ti == 1 && (k == "a" || k == "d")) setTimeout(() => ti == 1 && tut(2), 1500); if (ti == 2 && (k == "w" || k == " ")) setTimeout(() => ti == 2 && tut(3), 1800)
+            if (k == "m") tog(op ? 0 : 1); if (k == "q") { if (ST) svT(!sop); else if (CR) crT(!cro) } if ((ST || CR) && !op) { if (k == "f") fpT(); if (k == "g") cleanT() } if (k == "u" && ST && !op) ucToggle()
+            if (k == "escape") { tog(0); svT(0); crT(0) } if (k == "r") { if (M.nr) place(me); else say("Respawn only works in the lobby!") } if (k == "l" && !op) load("lobby"); if (k == "h") tut(0); if (ti == 1 && (k == "a" || k == "d")) setTimeout(() => ti == 1 && tut(2), 1500); if (ti == 2 && (k == "w" || k == " ")) setTimeout(() => ti == 2 && tut(3), 1800)
         };
         onkeyup = e => keys[e.key.toLowerCase()] = 0; onblur = () => { for (const k in keys) keys[k] = 0 };
         function tog(v) { op = v; $("p").hidden = !v; if (!v) uidShow = 0; if (v) ren() }
@@ -1067,18 +1210,18 @@
             else if (it.gr) { snd(150, .2); say("Content creator item - given out by staff") } else if (it.lk) { snd(150, .2); say("Collect " + it.lk + " candy to unlock this! (" + (S.candy | 0) + "/" + it.lk + ")") } else if (S.coins >= it.p) { S.coins -= it.p; S.own[it.id] = 1; S.eq[it.c] = it.id; snd(900, .15); say("Bought " + it.n + "!") } else { snd(150, .2); say("Not enough coins! Need " + (it.p - S.coins) + " more") } save()
         }
         function ren() {
-            $("uid").textContent = uidShow ? fmtU() : "hidden - press Show"; $("uidb").textContent = uidShow ? "Hide" : "Show"; $("code").value = S.code || "public"; $("mo0").className = S.online ? "" : "on"; $("mo1").className = S.online ? "on" : ""; $("coin").textContent = S.coins; $("candy").textContent = S.candy | 0; $("hwr").hidden = !HW; $("nm").value = S.name; $("hue").value = S.hue; $("bots").value = S.bots; $("bn").textContent = S.bots; $("mst").hidden = !ST; renV();
+            $("uid").textContent = uidShow ? fmtU() : "hidden - press Show"; $("uidb").textContent = uidShow ? "Hide" : "Show"; $("code").value = S.code || "public"; $("mo0").className = S.online ? "" : "on"; $("mo1").className = S.online ? "on" : ""; $("coin").textContent = S.coins; $("candy").textContent = S.candy | 0; $("hwr").hidden = !HW; $("botsrow").hidden = !!S.online; $("nm").value = S.name; $("hue").value = S.hue; $("bots").value = S.bots; $("bn").textContent = S.bots; $("mst").hidden = !ST; renV();
             $("sw").innerHTML = [0, 25, 50, 120, 190, 220, 280, 320].map(h => `<span class="sw" data-h="${h}" style="background:hsl(${h},55%,42%)"></span>`).join("")
         }
         $("p").onclick = e => { const d = e.target.dataset; if (d.h !== undefined) { S.hue = me.hue = +d.h } if (d.m) { if (d.m == "staff" && !ST) return; tog(0); load(d.m) } save(); ren() };
-        $("mb").onclick = () => tog(op ? 0 : 1); $("sb").onclick = () => svT(!sop);
+        $("mb").onclick = () => tog(op ? 0 : 1); $("sb").onclick = () => ST ? svT(!sop) : crT(!cro);
         $("nm").oninput = e => { S.name = me.name = e.target.value || "goril"; save() };
         $("hue").oninput = e => { S.hue = me.hue = +e.target.value; save() };
         $("bots").oninput = e => { S.bots = +e.target.value; $("bn").textContent = S.bots; save() };
         $("x").onclick = () => tog(0);
         /* ---------- REAL SERVER CLIENT (WebSocket) ---------- */
         function net() {
-            vcReset(); try { pPush() } catch (e) { } PJ = 0; if (WS) { try { WS.close() } catch (e) { } WS = null } RM = null; OG = {}; myId = null; ST = ""; kd = 0; if (me) me.r = ""; if (!S.online) return;
+            vcReset(); try { pPush() } catch (e) { } PJ = 0; if (WS) { try { WS.close() } catch (e) { } WS = null } RM = null; OG = {}; myId = null; ST = ""; CR = 0; kd = 0; if (me) me.r = ""; if (!S.online) return;
             const off = t => { say(t); S.online = 0; save(); load(M.n) };
             const host = window.GORIL_SERVER || location.host;   // desktop app pins its server; ?server= is intentionally NOT supported (a crafted link could steal your player ID)
             if (!host || !window.WebSocket) return off("No game server found - playing offline");
@@ -1088,7 +1231,7 @@
             w.onopen = () => w.send(JSON.stringify({ t: "join", uid: UID, room: (S.code || "public") + "-" + n }));
             w.onmessage = e => {
                 let d; try { d = JSON.parse(e.data) } catch (x) { return } if (M.n != n || WS != w) return;
-                if (d.t == "hi") { myId = d.id; ST = d.r == "owner" || d.r == "mod" ? d.r : ""; me.r = ST; ok = 1; rd = { st: "wait", t: 4 }; if (ST && ucOn) setTimeout(() => cmd("undercover", "", "", "", 1), 250); RM = { presence(s) { const t = performance.now(); if (t - lt < 45 || w.readyState != 1) return; lt = t; w.send(JSON.stringify({ t: "s", d: s })) } } }
+                if (d.t == "hi") { myId = d.id; ST = d.r == "owner" || d.r == "mod" ? d.r : ""; CR = d.r == "creator" ? 1 : 0; me.r = ST || (CR ? "creator" : ""); ok = 1; rd = { st: "wait", t: 4 }; if (ST && ucOn) setTimeout(() => cmd("undercover", "", "", "", 1), 250); RM = { presence(s) { const t = performance.now(); if (t - lt < 45 || w.readyState != 1) return; lt = t; w.send(JSON.stringify({ t: "s", d: s })) } } }
                 else if (d.t == "p") onP(d); else if (d.t == "ev") onEv(d); else if (d.t == "fx") onFx(d); else if (d.t == "rtc") vcSig(d.from, d.d)
             };
             w.onerror = () => { if (!ok && WS == w) off("Could not connect - playing offline") };
@@ -1101,15 +1244,15 @@
         function onP(d) {
             rd.st = d.st; rd.t = d.rt; const seen = {};
             d.ps.forEach(p => {
-                if (p.id == myId) { me.it = M.nr ? 0 : p.it; me.tg = p.tg; me.mu = p.mu; ST = p.r == "owner" || p.r == "mod" ? p.r : ""; me.r = ST; if (!ST && ucOn) ucReset(); return } seen[p.id] = 1; let g = OG[p.id]; if (!g) { g = OG[p.id] = mk({ net: 1, x: p.x, y: p.y, tx: p.x, ty: p.y }); G.push(g) }
-                Object.assign(g, { id: p.id, k: p.k, mu: p.mu, tx: p.x, ty: p.y, f: p.f, it: M.nr ? 0 : p.it, name: p.n, hue: p.hu, eq: p.e, vx: p.vx, vy: p.vy, tg: p.tg, th: p.h, r: p.r == "owner" || p.r == "mod" ? p.r : "" })
+                if (p.id == myId) { me.it = M.nr ? 0 : p.it; me.tg = p.tg; me.mu = p.mu; ST = p.r == "owner" || p.r == "mod" ? p.r : ""; CR = p.r == "creator" ? 1 : 0; me.r = ST || (CR ? "creator" : ""); if (!ST && ucOn) ucReset(); return } seen[p.id] = 1; let g = OG[p.id]; if (!g) { g = OG[p.id] = mk({ net: 1, x: p.x, y: p.y, tx: p.x, ty: p.y }); G.push(g) }
+                Object.assign(g, { id: p.id, k: p.k, mu: p.mu, tx: p.x, ty: p.y, f: p.f, it: M.nr ? 0 : p.it, name: p.n, hue: p.hu, eq: p.e, vx: p.vx, vy: p.vy, tg: p.tg, th: p.h, r: p.r == "owner" || p.r == "mod" || p.r == "creator" ? p.r : "" })
             });
             for (const k in OG) if (!seen[k]) { G.splice(G.indexOf(OG[k]), 1); delete OG[k] }
         }
         function onFx(d) {
             const n = performance.now();
-            if (d.k == "launch") { me.vy = -1500; me.vx = (Math.random() - .5) * 900; say("A staff member launched you!") }
-            else if (d.k == "freeze") { me.fz = n + 4000; say("Frozen by staff!") }
+            if (d.k == "launch") { me.vy = -1500; me.vx = (Math.random() - .5) * 900; say("You got launched!") }
+            else if (d.k == "freeze") { me.fz = n + 4000; say("You got frozen!") }
             else if (d.k == "invert") { me.inv = n + 8000; say("Your controls are inverted!") }
             else if (d.k == "lowgrav") { me.lg = n + 10000; say("Low gravity!") }
             else if (d.k == "goto" && Number.isFinite(d.x) && Number.isFinite(d.y)) { me.x = d.x; me.y = d.y; me.vx = me.vy = 0; say("Teleported by staff") }
@@ -1169,8 +1312,8 @@ Click a player (or press Tab) for their card: Mute / Report / Check. Staff mutes
             const n = performance.now(), mw = Math.min(440, W0 * .6), L = CH.filter(m => chOpen || n - m.t < 12000).slice(chOpen ? -14 : -7); if (!L.length) return;
             c.save(); c.font = "bold 14px 'Courier New'"; c.textAlign = "left"; let y = 50;
             L.forEach(m => {
-                const al = chOpen ? 1 : Math.max(0, Math.min(1, (12000 - (n - m.t)) / 1500)), pre = m.sys ? "" : (m.r == "owner" ? "[OWNER] " : m.r == "mod" ? "[MOD] " : "") + (m.n ? m.n + ": " : ""), lines = wrapT(c, pre + m.txt, mw, 4);
-                const w = Math.max(...lines.map(l => c.measureText(l).width)) + 14, h = lines.length * 18 + 6, col = m.sys ? "#9a8f7a" : m.r == "owner" ? "#ffd23f" : m.r == "mod" ? "#4fc3ff" : nmCol(m.n);
+                const al = chOpen ? 1 : Math.max(0, Math.min(1, (12000 - (n - m.t)) / 1500)), pre = m.sys ? "" : (m.r == "owner" ? "[OWNER] " : m.r == "mod" ? "[MOD] " : m.r == "creator" ? "[CREATOR] " : "") + (m.n ? m.n + ": " : ""), lines = wrapT(c, pre + m.txt, mw, 4);
+                const w = Math.max(...lines.map(l => c.measureText(l).width)) + 14, h = lines.length * 18 + 6, col = m.sys ? "#9a8f7a" : m.r == "owner" ? "#ffd23f" : m.r == "mod" ? "#4fc3ff" : m.r == "creator" ? "#ff5c5c" : nmCol(m.n);
                 c.globalAlpha = al; c.fillStyle = "rgba(26,18,10,.66)"; c.fillRect(12, y, w, h); c.fillStyle = col; c.fillRect(12, y, 3, h);
                 lines.forEach((l, i) => {
                     const ty = y + 18 + i * 18;
@@ -1193,6 +1336,7 @@ Click a player (or press Tab) for their card: Mute / Report / Check. Staff mutes
             c.restore()
         }
         function onEv2(d) {
+            if (d.k == "modcall") { const w = "🆘 " + String(d.n).slice(0, 12) + " needs a mod - code " + String(d.code).slice(0, 16) + " (" + String(d.map).slice(0, 10) + ")"; say(w); chAdd("", "", w, 1); snd(900, .15, "triangle"); setTimeout(() => snd(1200, .2, "triangle"), 180); return true }
             if (d.k == "chat") { const g = d.id == myId ? me : OG[d.id]; if (g && g != me && ((g.k && S.mu[g.k]) || g.lm)) return true; chAdd(d.n, d.r, d.txt); if (g) g.cb = { txt: d.txt, t: performance.now() }; return true }
             if (d.k == "check") { if (pfg && pfg.id == d.id) { pfChk = d; pfR() } return true }
             if (d.k == "muted") { say(d.on ? "🔇 You were muted by staff" : "🔊 You can talk again"); chAdd("", "", d.on ? "You were muted by staff." : "You were unmuted.", 1); return true }
@@ -1288,10 +1432,10 @@ Click a player (or press Tab) for their card: Mute / Report / Check. Staff mutes
         }
         function pfR() {
             const g = pfg; if (!g) return; const bot = !g.net, mu = bot ? !!g.lm : !!(g.k && S.mu[g.k]), W = wear(g), rk = { owner: 2, mod: 1 }, can = !bot && (rk[ST] || 0) > (rk[g.r] || 0), O = ST == "owner", keep = $("rt") ? $("rt").value : "";
-            $("pfn").innerHTML = `<b style="font-size:18px">${esc(g.name)}</b> ${g.r == "owner" ? "<span style='color:#b8860b'>[OWNER]</span>" : g.r == "mod" ? "<span style='color:#1f6fb2'>[MOD]</span>" : ""}${bot ? " <small>(bot)</small>" : ""}${g.it ? " 🔥" : ""}${g.mu ? " 🔇" : ""}`;
+            $("pfn").innerHTML = `<b style="font-size:18px">${esc(g.name)}</b> ${g.r == "owner" ? "<span style='color:#b8860b'>[OWNER]</span>" : g.r == "mod" ? "<span style='color:#1f6fb2'>[MOD]</span>" : g.r == "creator" ? "<span style='color:#c62828'>[CREATOR]</span>" : ""}${bot ? " <small>(bot)</small>" : ""}${g.it ? " 🔥" : ""}${g.mu ? " 🔇" : ""}`;
             $("pfw").innerHTML = "<small>Wearing: " + (W.length ? W.map(esc).join(", ") : "nothing - plain gorilla") + "</small>";
             let a = `<button data-a="mute" class="${mu ? "on" : ""}">${mu ? "🔊 Unmute" : "🔇 Mute"}</button>` + (bot ? "" : `<button data-a="rep">🚩 Report</button><button data-a="chk">🔍 Check</button>`);
-            if (can) a += `<div style="margin-top:8px"><small>Staff:</small> <button data-st="${g.mu ? "unmute" : "mute"}" class="${g.mu ? "on" : ""}">${g.mu ? "Unmute (staff)" : "Mute (staff)"}</button><button data-st="kick" class="red">Kick</button>${O ? `<button data-st="ban" class="red">Ban</button><button data-st="${g.r == "mod" ? "unmod" : "mod"}">${g.r == "mod" ? "Remove mod" : "Make mod"}</button>` : ""}<button data-a="go">Go to</button></div>`;
+            if (can) a += `<div style="margin-top:8px"><small>Staff:</small> <button data-st="${g.mu ? "unmute" : "mute"}" class="${g.mu ? "on" : ""}">${g.mu ? "Unmute (staff)" : "Mute (staff)"}</button><button data-st="kick" class="red">Kick</button>${O ? `<button data-st="ban" class="red">Ban</button><button data-st="${g.r == "mod" ? "unmod" : "mod"}">${g.r == "mod" ? "Remove mod" : "Make mod"}</button>${g.r == "mod" ? "" : `<button data-st="${g.r == "creator" ? "uncreator" : "creator"}">${g.r == "creator" ? "Remove creator" : "Make creator"}</button>`}` : ""}<button data-a="go">Go to</button></div>`;
             if (bot) a += "<p><small>Bots can't be reported or checked.</small></p>";
             let r = "";
             if (pfRep) r = `<div style="margin-top:8px">Why are you reporting them?</div>` + Object.entries(REAS).map(([k, v]) => `<button data-why="${k}" class="${pfWhy == k ? "on" : ""}">${v}</button>`).join("") + `<input type="text" id="rt" maxlength="140" placeholder="Extra details (optional)"><button data-a="send">Send report</button><button data-a="canr">Cancel</button><br><small>Staff get the player's name, the room, recent chat and an automatic check.</small>`;
@@ -1322,7 +1466,7 @@ Click a player (or press Tab) for their card: Mute / Report / Check. Staff mutes
         function plT(v) { plo = v ? 1 : 0; $("pl").hidden = !v; if (v) plR() }
         function plR() {
             plL = G.filter(g => g != me);
-            const h = plL.length ? plL.map((g, i) => `<button data-i="${i}" style="display:block;width:100%;text-align:left;margin:3px 0">${g.r == "owner" ? "👑 " : g.r == "mod" ? "🛡 " : ""}${esc(g.name)}${g.it ? " 🔥" : ""}${(g.net ? g.k && S.mu[g.k] : g.lm) ? " 🔇" : ""}${g.mu ? " (muted)" : ""}</button>`).join("") : "<p>Nobody else is here right now.</p>";
+            const h = plL.length ? plL.map((g, i) => `<button data-i="${i}" style="display:block;width:100%;text-align:left;margin:3px 0">${g.r == "owner" ? "👑 " : g.r == "mod" ? "🛡 " : g.r == "creator" ? "🎬 " : ""}${esc(g.name)}${g.it ? " 🔥" : ""}${(g.net ? g.k && S.mu[g.k] : g.lm) ? " 🔇" : ""}${g.mu ? " (muted)" : ""}</button>`).join("") : "<p>Nobody else is here right now.</p>";
             if (h != plR.last) { plR.last = h; $("plc").innerHTML = h }
         }
         setInterval(() => { if (plo) plR() }, 700);
@@ -1364,7 +1508,7 @@ Click a player (or press Tab) for their card: Mute / Report / Check. Staff mutes
         const nearV = () => M.V && me.x > M.V.x - 60 && me.x < M.V.x + M.V.w + 60 && me.y > M.V.y - 80 && me.y < M.V.y + M.V.h + 80;
         function useVent() { snd(200, .15, "sawtooth"); if (ST) { svT(0); load("staff") } else say(WS && RM ? "ACCESS DENIED - staff only" : "The staff room only works in Online mode") }
         function svT(v) { sop = v; $("sv").hidden = !v; if (v) { rsv.last = ""; rsv() } }
-        function cmd(k, to, txt, item, on) { if (ST && WS && WS.readyState == 1) WS.send(JSON.stringify({ t: "cmd", k, to, txt, item, on })) }
+        function cmd(k, to, txt, item, on) { if ((ST || CR) && WS && WS.readyState == 1) WS.send(JSON.stringify({ t: "cmd", k, to, txt, item, on })) }
         const FXB = [["launch", "Launch"], ["rocket", "Rocket"], ["freeze", "Freeze"], ["invert", "Invert"], ["lowgrav", "Low-G"], ["slow", "Slow"], ["home", "Respawn"], ["goto", "Bring"]];
         function rsv() {
             if (!ST) { $("sv").hidden = true; sop = 0; return }
@@ -1388,7 +1532,7 @@ Click a player (or press Tab) for their card: Mute / Report / Check. Staff mutes
                     const g = OG[k], prot = g.r == "owner" || (g.r == "mod" && !O);
                     h += `<div style="margin:6px 0;border-top:1px solid #555;padding-top:6px"><b>${esc(g.name)}</b> ${g.r ? "(" + g.r + ")" : ""}${g.it ? " [infected]" : ""}<br><button data-g="${esc(k)}">Go to</button>`;
                     if (prot) h += "<small> protected (same or higher rank)</small>";
-                    else h += [["kick", "Kick"], O ? ["ban", "Ban"] : 0, O ? [g.r == "mod" ? "unmod" : "mod", g.r == "mod" ? "Remove mod" : "Make mod"] : 0, ["infect", "Infect"], ["cure", "Cure"]].concat(FXB).filter(x => x).map(([a, n]) => `<button class="${a == "ban" || a == "kick" ? "red" : ""}" data-x="${a}|${esc(k)}">${n}</button>`).join("");
+                    else h += [["kick", "Kick"], O ? ["ban", "Ban"] : 0, O ? [g.r == "mod" ? "unmod" : "mod", g.r == "mod" ? "Remove mod" : "Make mod"] : 0, O && g.r != "mod" ? [g.r == "creator" ? "uncreator" : "creator", g.r == "creator" ? "Remove creator" : "Make creator"] : 0, ["infect", "Infect"], ["cure", "Cure"]].concat(FXB).filter(x => x).map(([a, n]) => `<button class="${a == "ban" || a == "kick" ? "red" : ""}" data-x="${a}|${esc(k)}">${n}</button>`).join("");
                     h += "</div>"
                 })
             } else if (svTab == "room") {
@@ -1416,7 +1560,25 @@ Click a player (or press Tab) for their card: Mute / Report / Check. Staff mutes
         $("uidb").onclick = () => { uidShow = !uidShow; ren() };
         $("ridb").onclick = () => { const v = $("rid").value.trim(); if (!v) return say("Paste your old player ID first"); if (!S.online || !PJ) return say("Switch to Online first, then try again"); wsend({ t: "restore", old: v }); $("rid").value = "" };
         $("uidc").onclick = () => { try { navigator.clipboard.writeText(fmtU()); say("ID copied") } catch (e) { say("Copy failed - select the ID text instead") } };
-        $("xx").onclick = () => tog(0); document.addEventListener("visibilitychange", () => { if (!document.hidden && S.online && !WS) net() });
+        $("xx").onclick = () => tog(0);
+        /* ---------- CREATOR MENU (red): content tools + a few troll tools. Server only accepts these commands from creators, on ordinary players. ---------- */
+        function crT(v) { cro = v ? 1 : 0; $("cr").hidden = !v; if (v) { rcr.last = ""; rcr() } }
+        function fpT(v) { fpOn = v == null ? !fpOn : v; $("crfp").classList.toggle("on", !!fpOn); say(fpOn ? "First-person cam ON (experimental) - F to exit" : "First-person cam off") }
+        function cleanT(v) { cleanOn = v == null ? !cleanOn : v; document.body.classList.toggle("clean", !!cleanOn); $("crcl").classList.toggle("on", !!cleanOn); if (!cleanOn) say("HUD back on") }
+        const TRL = [["launch", "Launch"], ["rocket", "Rocket"], ["lowgrav", "Low-G"], ["slow", "Slow"], ["invert", "Invert"], ["freeze", "Freeze"]];
+        function rcr() {
+            if (!CR) return; const L = Object.keys(OG).filter(k => !OG[k].r);
+            const h = L.length ? L.map(k => `<div class="pr"><b>${esc(OG[k].name)}</b><br>` + TRL.map(([a, n]) => `<button data-t="${a}|${esc(k)}">${n}</button>`).join("") + "</div>").join("") : "<small>No players to troll right now.</small>";
+            if (h != rcr.last) { rcr.last = h; $("crt").innerHTML = h }
+        }
+        setInterval(() => { if (cro) rcr() }, 1200);
+        $("cr").onclick = e => {
+            const t = e.target; if (t.id == "crx") return crT(0); if (t.id == "crfp") return fpT(); if (t.id == "crcl") return cleanT();
+            const d = t.dataset; if (d.t) { const n = performance.now(); if (n - crLast < 900) return; crLast = n; const [k, id] = d.t.split("|"); cmd(k, id); snd(500, .1) }
+        };
+        $("crz").oninput = e => { crZoom = +e.target.value / 100; $("crzn").textContent = e.target.value };
+        $("cm").onclick = () => { if (!(WS && WS.readyState == 1)) return say("Call a mod needs Online mode"); wsend({ t: "callmod" }); tog(0) };
+        $("hp").onclick = () => { tog(0); tut(0) }; document.addEventListener("visibilitychange", () => { if (!document.hidden && S.online && !WS) net() });
         $("mo0").onclick = () => { S.online = 0; save(); tog(0); load(M.n) }; $("mo1").onclick = () => { S.online = 1; save(); tog(0); load(M.n) };
         $("code").onchange = e => { S.code = e.target.value.toLowerCase().replace(/[^a-z0-9]/g, "") || "public"; save(); if (S.online) { tog(0); load(M.n) } };
         $("tnx").onclick = () => tut(ti + 1); $("tsk").onclick = () => tut(-1);
