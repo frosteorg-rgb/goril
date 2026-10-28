@@ -554,7 +554,7 @@ const GA = (() => {
     const IMM = new Set(["staffitem", "fakecmd", "privesc", "banevade", "selfmod", "report", "tamper", "devtools", "noguard"]);   // these alert Discord at once, whatever the score
     const THR = { altip: 300000, banevade: 0, badword: 0, chatspam: 0, tamper: 0, devtools: 0, noguard: 0 };                                                   // kinds that are logged + sent to Discord EVERY time; the rest are collapsed per 10 s (repeat counts are included)
     const rec = new Map(), recent = [], raws = new Map(), rp = new Map(), acts = new Map(), ipb = new Map();
-    const BOUNDS = { lobby: [2600, 1500], city: [3400, 1700], forest: [3800, 1700], sky: [3400, 1800], staff: [2800, 1200] };
+    const BOUNDS = { lobby: [2600, 1500], city: [3400, 1700], forest: [3800, 1700], sky: [3400, 1800], desert: [4600, 2100], staff: [2800, 1200] };
     const mask = ip => String(ip || "?").replace(/^(\d+\.\d+)\.\d+\.\d+$/, "$1.x.x");
 
     /* ---- Discord delivery: every message is queued, packed up to 10 embeds per request, retried on errors and on Discord rate limits (429). Nothing is silently dropped. ---- */
