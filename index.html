@@ -538,6 +538,7 @@
             <h4>CONTENT</h4>
             <button id="crfp">📷 First-person cam <small>beta (F)</small></button><button id="crcl">🧼 Clean screen (G)</button>
             <div style="margin-top:6px">Zoom <b id="crzn">100</b>%</div><input type="range" id="crz" min="70" max="160" value="100" style="width:100%">
+            <h4>(Troll, but don't abuse too much, as it can be taken away.)</h4>
             <h4>TROLL</h4><div id="crt"></div>
         </div>
     </div>
@@ -603,7 +604,7 @@
                 W, H, gy, nr: 1, sky: ["#2a2d4a", "#14152a"], gc: "#3a3a52", gt: "#55557a", sp: [[1250, gy - 40]],
                 ent: { city: [230, gy - 40], forest: [2415, gy - 40], shop: [1550, gy - 40], sky: [1770, gy - 680] },   // where you appear when coming back from a map
                 R: [{ x: -60, y: gy, w: W + 120, h: 120, k: "f" }, { x: -60, y: -60, w: W + 120, h: 60, k: "w" }, { x: -60, y: 0, w: 60, h: H, k: "w" }, { x: W, y: 0, w: 60, h: H, k: "w" },
-                { x: 1960, y: P1, w: 600, h: 18, k: "s", o: 1 }, { x: 0, y: P2, w: 2220, h: 18, k: "s", o: 1 },
+                { x: 1960, y: P1, w: 600, h: 18, k: "s", o: 1 }, { x: 0, y: P2, w: 2420, h: 18, k: "s", o: 1 },
                 { x: 2330, y: gy - 420, w: 60, h: 420, k: "ld", hd: 1 },        // ladder up to the display platform
                 { x: 1740, y: gy - 1020, w: 60, h: 400, k: "ld", hd: 1 }],      // ladder up into the sky tunnel
                 P: [{ x: 10, y: gy - 190, w: 150, h: 190, to: "city", l: "🏙 CITY", c: 215, tn: 1, auto: 1, d: -1 },
@@ -708,10 +709,21 @@
             return { W, H, gy, R, D, sp, sky: ["#2d5d4f", "#b9e0a0"], gc: "#2e4a22", gt: "#4f9a3a", bg: Array.from({ length: 40 }, () => 300 + r() * 500), P: [{ x: 50, y: gy - 150, w: 90, h: 150, to: "lobby", l: "LOBBY" }] }
         };
         MAPS.sky = () => {
-            const W = 3400, H = 2200, gy = H - 100, r = rng(5), R = [{ x: -60, y: gy, w: W + 120, h: 160, k: "f" }, { x: -60, y: -60, w: W + 120, h: 60, k: "w" }, { x: -60, y: 0, w: 60, h: H, k: "w" }, { x: W, y: 0, w: 60, h: H, k: "w" }], sp = [];
-            for (let i = 0; i < 40; i++) { const w = 160 + r() * 200 | 0, x = r() * (W - w) | 0, y = 250 + r() * (gy - 400) | 0; R.push({ x, y, w, h: 26, k: "p", o: 1 }); sp.push([x + w / 2, y - 30]) }
-            for (let i = 0; i < 8; i++)R.push({ x: 200 + i * 400, y: gy - 700 - r() * 600 | 0, w: 40, h: 600, k: "t", hd: 1 });
-            return { W, H, gy, R, sp, sky: ["#4aa3ff", "#fbe3c4"], gc: "#e8f1ff", gt: "#fff", P: [{ x: 50, y: gy - 150, w: 90, h: 150, to: "lobby", l: "LOBBY" }] }
+            const W = 3400, H = 1800, gy = H - 100, r = rng(5), R = [{ x: -60, y: gy, w: W + 120, h: 160, k: "f" }, { x: -60, y: -60, w: W + 120, h: 60, k: "w" }, { x: -60, y: 0, w: 60, h: H, k: "w" }, { x: W, y: 0, w: 60, h: H, k: "w" }], sp = [];
+            /* Designed layout: evenly spaced tiers (150px apart = a single bot hop), staggered so every platform has one above it within reach,
+               plus 3 ladders from the ground to the summit as a guaranteed route. No random gaps, nothing for bots to wedge into. */
+            const T = 8, GAP = 150; sp.push([300, gy - 40], [1700, gy - 40], [3100, gy - 40]);
+            for (let i = 1; i <= T; i++) { const y = gy - i * GAP, off = i % 2 ? 100 : 600; for (let x = off; x < W - 300; x += 1000) { R.push({ x, y, w: 520, h: 26, k: "p", o: 1 }); if (i > 1) sp.push([x + 260, y - 30]) } }
+            R.push({ x: 1300, y: gy - (T + 1) * GAP, w: 800, h: 26, k: "p", o: 1 }); sp.push([1700, gy - (T + 1) * GAP - 30]);
+            [200, 1700, 3100].forEach(x => R.push({ x, y: gy - (T + 1) * GAP - 40, w: 60, h: (T + 1) * GAP + 40, k: "ld", hd: 1 }));
+            return {
+                W, H, gy, R, sp, sky: ["#4aa3ff", "#fbe3c4"], gc: "#e8f1ff", gt: "#fff", ent: { lobby: [320, gy - 40] },
+                pre: c => {
+                    const t = performance.now() / 1000; c.fillStyle = "#ffffff"; c.globalAlpha = .35;
+                    for (let i = 0; i < 26; i++) { const x = (i * 263 + t * (6 + i % 5)) % (W + 400) - 200, y = 150 + (i * 97) % (H - 300), s = 50 + (i * 37) % 70; c.beginPath(); c.ellipse(x, y, s * 1.6, s * .6, 0, 0, 7); c.ellipse(x + s, y - s * .3, s, s * .55, 0, 0, 7); c.ellipse(x - s, y - s * .2, s * .9, s * .5, 0, 0, 7); c.fill() }
+                    c.globalAlpha = 1; c.textAlign = "center"; c.fillStyle = "#fffb"; c.font = "bold 26px Courier New"; c.fillText("SUMMIT ▲", 1700, gy - (T + 1) * GAP - 40)
+                }, P: [{ x: 50, y: gy - 150, w: 90, h: 150, to: "lobby", l: "LOBBY" }]
+            }
         };
         let AC; function snd(f, d = .1, ty = "square") { try { AC = AC || new AudioContext(); const o = AC.createOscillator(), v = AC.createGain(); o.type = ty; o.frequency.value = f; v.gain.value = .05; o.connect(v); v.connect(AC.destination); o.start(); v.gain.exponentialRampToValueAtTime(.001, AC.currentTime + d); o.stop(AC.currentTime + d) } catch (e) { } }
         /* ---------- HALLOWEEN UPDATE ----------
@@ -856,6 +868,7 @@
         }
         const mk = o => Object.assign({ x: 0, y: 0, vx: 0, vy: 0, ph: 0, f: 1, it: 0, t: 0, bot: 0, name: "", hue: 30, eq: { hat: "none", face: "none", back: "none", trail: "none" }, h: [{ x: 14, y: 16, px: 14, py: 16 }, { x: -14, y: 16, px: -14, py: 16 }] }, o);
         function step(g, n, dt) {
+            const sz = g.sz || 1, sm = g.sm || 1, jm = g.jm || 1;   // owner-only self effects: body size, run speed, jump power
             const dx = (n.d ? 1 : 0) - (n.a ? 1 : 0), m = n.w ? 1 : dx ? 2 : n.s ? 3 : 0; if (dx) g.f = dx; if (m != g.pm) { g.pm = m; g.rp = 0 } g.rp = Math.min(1, (g.rp || 0) + dt / .1);
             if (m == 1) g.ph += 16 * dt; else if (m == 2) g.ph += 11 * dt;
             const k = Math.min(1, dt * 40);
@@ -864,23 +877,23 @@
                 if (m == 1) { tx = sd * 14 + dx * 14; ty = 12 + Math.sin(a) * 28 }
                 else if (m == 2) { tx = dx * Math.cos(a) * 46; ty = 20 + Math.sin(a) * 20 }
                 else if (m == 3) { tx = sd * 26; ty = 32 } else { tx = sd * 14; ty = 16 }
-                h.px = h.x; h.py = h.y; h.x += (tx - h.x) * k; h.y += (ty - h.y) * k
+                tx *= sz; ty *= sz; h.px = h.x; h.py = h.y; h.x += (tx - h.x) * k; h.y += (ty - h.y) * k
             });
-            g.vy += 1500 * (g.gm == null ? 1 : g.gm) * dt; g.vx *= 1 - .1 * dt; if (dx && g.vx * dx < (m == 1 ? 550 : 350)) g.vx += dx * (m == 1 ? 900 : 500) * dt; g.x += g.vx * dt; g.y += g.vy * dt; let fl = 0;
-            for (const b of R) { if (b.hd || b.o && (g.vy < 0 || g.y > b.y)) continue; const c = hit(g.x, g.y, 16, b); if (c) { g.x += c.nx * c.p; g.y += c.ny * c.p; const v = g.vx * c.nx + g.vy * c.ny; if (v < 0) { g.vx -= v * c.nx; g.vy -= v * c.ny } if (c.ny < -.5) fl = 1 } }
+            g.vy += 1500 * (g.gm == null ? 1 : g.gm) * dt; g.vx *= 1 - .1 * dt; if (dx && g.vx * dx < (m == 1 ? 550 : 350) * sm) g.vx += dx * (m == 1 ? 900 : 500) * sm * dt; g.x += g.vx * dt; g.y += g.vy * dt; let fl = 0;
+            for (const b of R) { if (b.hd || b.o && (g.vy < 0 || g.y > b.y)) continue; const c = hit(g.x, g.y, 16 * sz, b); if (c) { g.x += c.nx * c.p; g.y += c.ny * c.p; const v = g.vx * c.nx + g.vy * c.ny; if (v < 0) { g.vx -= v * c.nx; g.vy -= v * c.ny } if (c.ny < -.5) fl = 1 } }
 
             g.h.forEach(h => {
                 let vx = (h.x - h.px) / dt, vy = (h.y - h.py) / dt; const hs = Math.hypot(vx, vy); if (hs > 520) { vx *= 520 / hs; vy *= 520 / hs }
                 for (const b of R) {
-                    const c = hit(g.x + h.x, g.y + h.y, 7, b); if (!c || b.hd && m != 1) continue; if (!(b.o || b.hd) || (b.o && c.ny < -.5)) { g.x += c.nx * c.p; g.y += c.ny * c.p }
+                    const c = hit(g.x + h.x, g.y + h.y, 7 * sz, b); if (!c || b.hd && m != 1) continue; if (!(b.o || b.hd) || (b.o && c.ny < -.5)) { g.x += c.nx * c.p; g.y += c.ny * c.p }
                     if (c.ny < -.5) fl = 1; if (m == 3) { g.vx *= 1 - 10 * dt; g.vy *= 1 - 3 * dt }
                     if (vy > 0 && vx * vx + vy * vy > 3600) {
-                        let tx = -vx * 1.5, ty = -vy * (m == 2 ? .7 : 2.3); const s = Math.hypot(tx, ty); if (s > 1400) { tx *= 1400 / s; ty *= 1400 / s }
+                        let tx = -vx * 1.5, ty = -vy * (m == 2 ? .7 : 2.3) * jm; const s = Math.hypot(tx, ty); if (s > 1400 * jm) { tx *= 1400 * jm / s; ty *= 1400 * jm / s }
                         const q = .6 * g.rp; g.vx += (tx - g.vx) * q; g.vy += (ty - g.vy) * q
                     }
                 }
             });
-            if (fl && m != 1 && m != 2) g.vx *= 1 - (m == 3 ? 25 : 14) * dt; const sp = Math.hypot(g.vx, g.vy); if (sp > 1500) { g.vx *= 1500 / sp; g.vy *= 1500 / sp }
+            if (fl && m != 1 && m != 2) g.vx *= 1 - (m == 3 ? 25 : 14) * dt; const sp = Math.hypot(g.vx, g.vy), mx = 1500 * Math.max(jm, sm); if (sp > mx) { g.vx *= mx / sp; g.vy *= mx / sp }
         }
         /* ---------- GAME STATE ---------- */
         let M, R = [], G = [], me, cam = { x: 0, y: 0 }, parts = [], rd = { st: "wait", t: 3 }, msg = "", msgT = 0, cd = 0, last = performance.now(), op = 0, lastAlive = null;
@@ -982,6 +995,7 @@
             return { d: dir > 0, a: dir < 0, w: !!up, s: !!br }
         }
         function tick(dt) {
+            if (ST == "owner") { me.sz = selfSz; me.sm = selfSpd; me.jm = selfJmp } else { me.sz = me.sm = me.jm = 1 }
             const pin = { a: keys.a || keys.arrowleft, d: keys.d || keys.arrowright, w: keys.w || keys.arrowup || keys[" "], s: keys.s || keys.arrowdown };
             const fxn = performance.now(), fz = (me.fz || 0) > fxn, pi2 = (me.inv || 0) > fxn ? { a: pin.d, d: pin.a, w: pin.w, s: pin.s } : pin; me.gm = fz ? 0 : (me.lg || 0) > fxn ? .25 : 1; if (fz) { me.vx = me.vy = 0 }
             const ins = G.map(g => g == me ? (op || fz ? {} : pi2) : g.net ? 0 : botIn(g));
@@ -997,7 +1011,7 @@
             });
             parts.forEach(p => { p.x += p.vx * dt; p.y += p.vy * dt; p.l -= dt }); parts = parts.filter(p => p.l > 0);
             hwTick(dt); cd -= dt; if (cd <= 0 && !op) for (const p of M.P) if ((keys.e || p.auto) && me.x > p.x && me.x < p.x + p.w && me.y > p.y && me.y < p.y + p.h) { load(p.to, M.n); return }
-            if (!M.nr) (RM ? oround : round)(dt); sync(); if (RM) RM.presence({ x: me.x | 0, y: me.y | 0, vx: me.vx | 0, vy: me.vy | 0, f: me.f, h: [me.h[0].x | 0, me.h[0].y | 0, me.h[1].x | 0, me.h[1].y | 0], hu: me.hue | 0, n: me.name, e: me.eq, it: me.it, tg: me.tg || 0 });
+            if (!M.nr) (RM ? oround : round)(dt); sync(); if (RM) RM.presence({ x: me.x | 0, y: me.y | 0, vx: me.vx | 0, vy: me.vy | 0, f: me.f, h: [me.h[0].x | 0, me.h[0].y | 0, me.h[1].x | 0, me.h[1].y | 0], hu: me.hue | 0, n: me.name, e: me.eq, it: me.it, tg: me.tg || 0, z: me.sz || 1 });
             msgT -= dt
         }
         function round(dt) {
@@ -1117,7 +1131,7 @@
         function drawG(g, ctx) {
             const c = ctx || cx, f = g.f, e = seq(g), col = g.it && HW ? `hsl(${95 + Math.sin(g.t * 5) * 8},55%,${36 + 6 * Math.sin(g.t * 8)}%)` : g.it ? `hsl(${g.t * 300 % 20},90%,${45 + 10 * Math.sin(g.t * 8)}%)` : `hsl(${g.hue},55%,42%)`, dk = g.it && HW ? "#1c4a14" : g.it ? "#7a0d0d" : `hsl(${g.hue},50%,28%)`;
             c.save(); c.translate(g.x, g.y);
-            c.lineCap = "round"; c.strokeStyle = dk; c.lineWidth = 8; g.h.forEach(h => { c.beginPath(); c.moveTo(0, -2); c.lineTo(h.x, h.y); c.stroke() });
+            const sz = g.sz || 1; c.scale(sz, sz); c.lineCap = "round"; c.strokeStyle = dk; c.lineWidth = 8; g.h.forEach(h => { c.beginPath(); c.moveTo(0, -2); c.lineTo(h.x / sz, h.y / sz); c.stroke() });
             c.save(); c.scale(f, 1);
             if (e.back == "cape" || e.back == "st_ocape" || e.back == "st_mcape") { const s = Math.max(-26, Math.min(6, -g.vx * f * .04)); c.fillStyle = e.back == "st_ocape" ? "#7a2bd1" : e.back == "st_mcape" ? "#2b6fd1" : "#c0262d"; c.beginPath(); c.moveTo(-2, -10); c.lineTo(-20 + s, 16); c.lineTo(-8 + s * .5, 26); c.lineTo(2, 12); c.fill() }
             if (e.back == "st_hammer") { c.fillStyle = "#6b4526"; c.save(); c.rotate(-.6); c.fillRect(-26, -26, 5, 32); c.fillStyle = "#666"; c.fillRect(-32, -30, 17, 10); c.restore() }
@@ -1166,8 +1180,8 @@
             if (e.hat == "halo") { c.strokeStyle = "#ffd84d"; c.lineWidth = 3; c.beginPath(); c.ellipse(0, -6, 10, 3, 0, 0, 7); c.stroke() }
             if (e.hat == "crown") { c.fillStyle = "#ffcc1a"; c.beginPath(); c.moveTo(-9, 5); c.lineTo(-9, -8); c.lineTo(-4, -2); c.lineTo(0, -10); c.lineTo(4, -2); c.lineTo(9, -8); c.lineTo(9, 5); c.fill() }
             c.restore(); c.restore();
-            c.fillStyle = "#d9b38c"; c.strokeStyle = dk; c.lineWidth = 2; g.h.forEach(h => { c.beginPath(); c.arc(h.x, h.y, 7, 0, 7); c.fill(); c.stroke() });
-            if (e.hand == "st_stick") { const h = g.h[0]; c.save(); c.translate(h.x, h.y); c.rotate(f * .35); c.fillStyle = "#e9dfc4"; c.fillRect(-2.5, -60, 5, 70); c.fillStyle = "#8a6a3a"; c.fillRect(-2.5, -4, 5, 14); c.fillRect(-2.5, -30, 5, 3); c.shadowColor = "#ffd23f"; c.shadowBlur = 10; c.fillStyle = "#ffd23f"; c.beginPath(); c.arc(0, -62, 4.5, 0, 7); c.fill(); c.shadowBlur = 0; c.restore() }
+            c.fillStyle = "#d9b38c"; c.strokeStyle = dk; c.lineWidth = 2; g.h.forEach(h => { c.beginPath(); c.arc(h.x / sz, h.y / sz, 7, 0, 7); c.fill(); c.stroke() });
+            if (e.hand == "st_stick") { const h = g.h[0]; c.save(); c.translate(h.x / sz, h.y / sz); c.rotate(f * .35); c.fillStyle = "#e9dfc4"; c.fillRect(-2.5, -60, 5, 70); c.fillStyle = "#8a6a3a"; c.fillRect(-2.5, -4, 5, 14); c.fillRect(-2.5, -30, 5, 3); c.shadowColor = "#ffd23f"; c.shadowBlur = 10; c.fillStyle = "#ffd23f"; c.beginPath(); c.arc(0, -62, 4.5, 0, 7); c.fill(); c.shadowBlur = 0; c.restore() }
             const rr = g == me && ucOn ? "" : g.r; c.fillStyle = rr == "owner" ? "#ffd23f" : rr == "mod" ? "#4fc3ff" : rr == "creator" ? "#ff5c5c" : g.it ? "#ff6b6b" : "#fff"; c.font = "bold 14px sans-serif"; c.textAlign = "center"; c.fillText(g.nn ? "" : (rr == "owner" ? "[OWNER] " : rr == "mod" ? "[MOD] " : rr == "creator" ? "[CREATOR] " : "") + g.name + (g.it ? (HW ? " 🧟" : " 🔥") : ""), 0, -42); drawFx(c, g); c.restore()
         }
         function drawHands(c, g) {   // first-person cam: you only see your own arms
@@ -1245,7 +1259,7 @@
             rd.st = d.st; rd.t = d.rt; const seen = {};
             d.ps.forEach(p => {
                 if (p.id == myId) { me.it = M.nr ? 0 : p.it; me.tg = p.tg; me.mu = p.mu; ST = p.r == "owner" || p.r == "mod" ? p.r : ""; CR = p.r == "creator" ? 1 : 0; me.r = ST || (CR ? "creator" : ""); if (!ST && ucOn) ucReset(); return } seen[p.id] = 1; let g = OG[p.id]; if (!g) { g = OG[p.id] = mk({ net: 1, x: p.x, y: p.y, tx: p.x, ty: p.y }); G.push(g) }
-                Object.assign(g, { id: p.id, k: p.k, mu: p.mu, tx: p.x, ty: p.y, f: p.f, it: M.nr ? 0 : p.it, name: p.n, hue: p.hu, eq: p.e, vx: p.vx, vy: p.vy, tg: p.tg, th: p.h, r: p.r == "owner" || p.r == "mod" || p.r == "creator" ? p.r : "" })
+                Object.assign(g, { id: p.id, k: p.k, mu: p.mu, tx: p.x, ty: p.y, f: p.f, it: M.nr ? 0 : p.it, name: p.n, hue: p.hu, eq: p.e, vx: p.vx, vy: p.vy, tg: p.tg, th: p.h, sz: +p.z || 1, r: p.r == "owner" || p.r == "mod" || p.r == "creator" ? p.r : "" })
             });
             for (const k in OG) if (!seen[k]) { G.splice(G.indexOf(OG[k]), 1); delete OG[k] }
         }
@@ -1489,7 +1503,7 @@ Click a player (or press Tab) for their card: Mute / Report / Check. Staff mutes
         document.addEventListener("click", e => { const b = e.target.closest && e.target.closest("button"); if (b) setTimeout(() => b.blur(), 0) });
         vbUpd();
         /* ---------- STAFF MENU (press Q in any map; vent in the lobby leads to the staff room) ---------- */
-        let svTab = "players", sop = 0, flyOn = 0;
+        let svTab = "players", sop = 0, flyOn = 0, selfSz = 1, selfSpd = 1, selfJmp = 1;
         /* ---------- UNDERCOVER (staff): random outfit from what you own + a common name picked by the SERVER; role tag and staff items hidden ---------- */
         let ucOn = 0, ucFit = null, ucName = "", gvTo = "self", gvMode = "give";
         function ucRoll() {
@@ -1541,9 +1555,31 @@ Click a player (or press Tab) for their card: Mute / Report / Check. Staff mutes
                 h += `<h4>Troll everyone (not owners)</h4>` + [["kick", "Kick all"], ["infect", "Infect all"], ["cure", "Cure all"]].concat(FXB).map(([a, n]) => `<button class="${a == "kick" ? "red" : ""}" data-x="${a}|all">${n}${a == "goto" ? " all" : ""}</button>`).join("");
                 h += `<h4>Round control</h4><button data-x="newround|">New round</button><button data-x="endround|">End round</button>`;
                 h += `<h4>Your powers</h4><button data-s="fly" class="${flyOn ? "on" : ""}">Fly ${flyOn ? "ON" : "off"}</button><button data-s="coins">+1000 coins</button><button data-s="admin">Open admin dashboard</button><small><br>Fly: A/D sideways, W up, S down.</small>`;
+                const so = (k, v, n, cur) => `<button data-o="${k}|${v}" class="${cur == v ? "on" : ""}">${n}</button>`;
+                h += `<h4>Yourself: size</h4>` + [[.4, "Tiny"], [.6, "Small"], [1, "Normal"], [1.6, "Big"], [2.4, "Huge"], [3.5, "Giant"]].map(([v, n]) => so("size", v, n, selfSz)).join("");
+                h += `<h4>Yourself: speed</h4>` + [[1, "Normal"], [1.6, "Fast"], [2.4, "Super"]].map(([v, n]) => so("spd", v, n, selfSpd)).join("");
+                h += `<h4>Yourself: jump</h4>` + [[1, "Normal"], [1.5, "High"], [2.2, "Super"]].map(([v, n]) => so("jmp", v, n, selfJmp)).join("");
+                h += `<h4>Yourself: effects</h4>` + [["launch", "Launch"], ["rocket", "Rocket"], ["freeze", "Freeze"], ["invert", "Invert"], ["lowgrav", "Low-G"], ["slow", "Slow"], ["home", "Respawn"], ["infect", "Infect"], ["cure", "Cure"]].map(([k, n]) => so(k, 1, n, 0)).join("") + `<br>` + so("reset", 1, "Reset everything", 0);
+                h += `<small><br>Size / speed / jump are visible to others (size) and owner-only; the server ignores them for anyone else.</small>`;
                 h += `<h4>Moderators</h4><small>Open the players tab: "Make mod" / "Remove mod" promotes anyone in the room. Saved on the server.</small>`
             }
             if (h + svTab == rsv.last) return; rsv.last = h + svTab; $("svc").innerHTML = h
+        }
+        function selfFx(o) {   // owner effects on your own character (local; size is also synced to other players)
+            const [k, v] = o.split("|"), n = performance.now(), x = +v;
+            if (k == "size") { selfSz = x; say("Size x" + x) }
+            else if (k == "spd") { selfSpd = x; say("Speed x" + x) }
+            else if (k == "jmp") { selfJmp = x; say("Jump x" + x) }
+            else if (k == "reset") { selfSz = selfSpd = selfJmp = 1; me.lg = me.fz = me.inv = me.sl = 0; flyOn = 0; say("Back to normal") }
+            else if (k == "launch") { me.vy = -1500; me.vx = (Math.random() - .5) * 900; say("Launched!") }
+            else if (k == "rocket") { me.vy = -1500; me.vx = 0; me.lg = n + 6000; say("ROCKET!") }
+            else if (k == "freeze") { me.fz = n + 4000; say("Frozen for 4s") }
+            else if (k == "invert") { me.inv = n + 8000; say("Controls inverted for 8s") }
+            else if (k == "lowgrav") { me.lg = n + 10000; say("Low gravity for 10s") }
+            else if (k == "slow") { me.sl = n + 8000; say("Slowed for 8s") }
+            else if (k == "home") { place(me); say("Back to spawn") }
+            else if (k == "infect" || k == "cure") { if (WS && myId) cmd(k, myId); else if (!M.nr) me.it = k == "infect" ? 1 : 0; say(k == "infect" ? "You are infected" : "You are cured") }
+            snd(500, .1)
         }
         $("sv").onclick = e => {
             const d = e.target.dataset; if (e.target.id == "svx") return svT(0);
@@ -1554,6 +1590,7 @@ Click a player (or press Tab) for their card: Mute / Report / Check. Staff mutes
             else if (d.q) { const [c, i] = d.q.split("|"); if (ST && (i == "none" || (SCAT[c] || []).some(x => x[0] == i && (x[2] == "m" || ST == "owner")))) { S.eq[c] = i; save(); rsv.last = ""; rsv() } }
             else if (d.g) { const g = OG[d.g]; if (g) { me.x = g.tx; me.y = g.ty - 30; me.vx = me.vy = 0 } }
             else if (d.s) { if (d.s == "uc") ucToggle(); else if (ST == "owner") { if (d.s == "fly") { flyOn = !flyOn; me.vx = me.vy = 0; say(flyOn ? "Fly ON" : "Fly OFF") } else if (d.s == "coins") { S.coins += 1000; save(); say("+1000 coins") } else if (d.s == "admin") { cmd("adminlink"); say("Opening the admin dashboard...") } } rsv.last = ""; rsv() }
+            else if (d.o) { if (ST == "owner") selfFx(d.o); rsv.last = ""; rsv() }
             else if (d.x) { const [k, to] = d.x.split("|"); if (k == "announce") { const t = ($("ann").value || "").trim(); if (t) { cmd("announce", "", t); $("ann").value = "" } } else cmd(k, to); snd(600, .1) }
         };
         setInterval(() => { if (!$("sv").hidden && (svTab == "players" || svTab == "give")) rsv() }, 1500);
@@ -1565,7 +1602,7 @@ Click a player (or press Tab) for their card: Mute / Report / Check. Staff mutes
         function crT(v) { cro = v ? 1 : 0; $("cr").hidden = !v; if (v) { rcr.last = ""; rcr() } }
         function fpT(v) { fpOn = v == null ? !fpOn : v; $("crfp").classList.toggle("on", !!fpOn); say(fpOn ? "First-person cam ON (experimental) - F to exit" : "First-person cam off") }
         function cleanT(v) { cleanOn = v == null ? !cleanOn : v; document.body.classList.toggle("clean", !!cleanOn); $("crcl").classList.toggle("on", !!cleanOn); if (!cleanOn) say("HUD back on") }
-        const TRL = [["launch", "Launch"], ["rocket", "Rocket"], ["lowgrav", "Low-G"], ["slow", "Slow"], ["invert", "Invert"], ["freeze", "Freeze"]];
+        const TRL = [["launch", "Launch"], ["lowgrav", "Low-G"], ["invert", "Invert"]];
         function rcr() {
             if (!CR) return; const L = Object.keys(OG).filter(k => !OG[k].r);
             const h = L.length ? L.map(k => `<div class="pr"><b>${esc(OG[k].name)}</b><br>` + TRL.map(([a, n]) => `<button data-t="${a}|${esc(k)}">${n}</button>`).join("") + "</div>").join("") : "<small>No players to troll right now.</small>";
