@@ -656,12 +656,12 @@
             // display dummies for the special cosmetics: [x, title, subtitle, outfit, role, hue, facing]
             const DM = [
                 [2030, "CONTENT CREATOR", "Given out by staff", { hat: "cc_cap", face: "none", back: "cc_cam", trail: "none", hand: "none" }, "", 340, 1],
-                [2190, "MODERATOR", "Staff only", { hat: "st_modhat", face: "st_shades", back: "st_mcape", trail: "none", hand: "st_stick" }, "mod", 210, 1],
-                [2490, "OWNER", "Staff only", { hat: "st_ocrown", face: "st_olaser", back: "st_ocape", trail: "none", hand: "none" }, "owner", 45, -1]
+                [2160, "MODERATOR", "Staff only", { hat: "st_modhat", face: "st_shades", back: "st_mcape", trail: "none", hand: "st_stick" }, "mod", 210, 1],
+                [2262, "OWNER", "Staff only", { hat: "st_ocrown", face: "st_olaser", back: "st_ocape", trail: "none", hand: "none" }, "owner", 45, -1]
             ].map(a => ({ x: a[0], t: a[1], s: a[2], g: mk({ eq: a[3], r: a[4], hue: a[5], f: a[6], nn: 1, name: "" }) }));
             return {
                 W, H, gy, nr: 1, sky: ["#2a2d4a", "#14152a"], gc: "#3a3a52", gt: "#55557a", sp: [[1250, gy - 40]],
-                ent: { city: [230, gy - 40], forest: [2415, gy - 40], shop: [1550, gy - 40], sky: [1770, gy - 680], desert: [1830, gy - 40] },   // where you appear when coming back from a map
+                ent: { city: [230, gy - 40], forest: [2415, gy - 40], shop: [1550, gy - 40], sky: [1770, gy - 680], desert: [250, P2 - 40], team: [2415, P1 - 40] },   // where you appear when coming back from a map
                 R: [{ x: -60, y: gy, w: W + 120, h: 120, k: "f" }, { x: -60, y: -60, w: W + 120, h: 60, k: "w" }, { x: -60, y: 0, w: 60, h: H, k: "w" }, { x: W, y: 0, w: 60, h: H, k: "w" },
                 { x: 1960, y: P1, w: 600, h: 18, k: "s", o: 1 }, { x: 0, y: P2, w: 2420, h: 18, k: "s", o: 1 },
                 { x: 2330, y: gy - 420, w: 60, h: 420, k: "ld", hd: 1 },        // ladder up to the display platform
@@ -670,7 +670,8 @@
                 { x: W - 160, y: gy - 190, w: 150, h: 190, to: "forest", l: "🌲 FOREST", c: 130, tn: 1, auto: 1, d: 1 },
                 { x: 1500, y: gy - 190, w: 100, h: 190, to: "shop", l: "🛍 SHOP", c: 45 },
                 { x: 1710, y: gy - 1230, w: 140, h: 250, to: "sky", l: "☁ SKY", c: 185, tn: "up", auto: 1 },
-                { x: 1900, y: gy - 190, w: 150, h: 190, to: "desert", l: "🏜 DESERT", c: 32, tn: 1, auto: 1, d: 1 }],
+                { x: 10, y: P2 - 190, w: 150, h: 190, to: "desert", l: "🏜 DESERT", c: 32, tn: 1, auto: 1, d: -1 },      // desert tunnel: far left of the sky-ladder platform (P2)
+                { x: 2440, y: P1 - 120, w: 110, h: 120, to: "team", l: "👥 STAFF", c: 48, tn: 1, auto: 1, d: 1 }],      // small staff tunnel: right end of the special-cosmetics platform (P1), low so the right wall stays climbable
                 V: { x: 1720, y: gy - 115, w: 70, h: 70 },
                 pre: c => {
                     const t = performance.now() / 1000; c.textAlign = "center";
@@ -686,7 +687,7 @@
                     // ladder hint
                     c.textAlign = "right"; c.fillStyle = "#fff8"; c.font = "bold 13px Courier New"; c.fillText("HOLD W TO CLIMB ▲", 2318, gy - 200); c.textAlign = "center";
                     // special cosmetics display on the platform above the forest tunnel
-                    c.fillStyle = "#ffd23f"; c.font = "bold 16px Courier New"; c.fillText("SPECIAL COSMETICS", 2295, P1 - 190);
+                    c.fillStyle = "#ffd23f"; c.font = "bold 16px Courier New"; c.fillText("SPECIAL COSMETICS", 2146, P1 - 190);
                     DM.forEach(d => {
                         c.fillStyle = "#3b3552"; c.fillRect(d.x - 46, P1 - 26, 92, 26); c.fillStyle = "#6a6a9a"; c.fillRect(d.x - 46, P1 - 26, 92, 5);
                         const g = d.g; g.t = t; g.x = d.x; g.y = P1 - 49; drawG(g);
@@ -698,6 +699,54 @@
                         c.fillStyle = "#3a2a1c"; c.font = "12px Courier New"; c.textAlign = "left"; let yy = y + 50;
                         L.forEach(l => { let ln = ""; l.split(" ").forEach(wd => { if (c.measureText(ln + wd).width > w - 26) { c.fillText(ln, x + 12, yy); yy += 15; ln = "" } ln += wd + " " }); c.fillText(ln, x + 12, yy); yy += 22 });
                         c.fillStyle = "#c33"; c.beginPath(); c.arc(x + 8, y + 8, 3, 0, 7); c.arc(x + w - 8, y + 8, 3, 0, 7); c.fill(); c.textAlign = "center"
+                    })
+                }
+            }
+        };
+        /* ---------- MEET THE STAFF ----------
+           EDIT THIS LIST to change who is shown. One { ... } per person, shown left to right.
+             name  - name on the plaque
+             role  - "owner" | "mod" | "creator" (colours the badge)  - or any other word (green badge)
+             label - text on the badge (optional, defaults to the role in capitals)
+             hue   - body colour, 0-360
+             f     - 1 = looks right, -1 = looks left
+             eq    - what they wear: hat / face / back / trail / hand. Use ids from CAT (shop items) or SCAT (staff items), "none" = nothing
+             lines - extra text under the name (join date, favourite map, anything you like). Long lines wrap, max 6 lines.
+           Add / remove people freely - the hall gets wider on its own (about 20 people fit before the anti-cheat map size in server.js needs raising). */
+        const STAFF = [
+            { name: "OwnerName", role: "owner", label: "OWNER", hue: 45, f: 1, eq: { hat: "st_ocrown", face: "st_olaser", back: "st_ocape", trail: "none", hand: "none" }, lines: ["Add something about", "the owner here"] },
+            { name: "ModName1", role: "mod", label: "MODERATOR", hue: 210, f: 1, eq: { hat: "st_modhat", face: "st_shades", back: "st_mcape", trail: "none", hand: "st_stick" }, lines: ["Add something about", "this mod here"] },
+            { name: "ModName2", role: "mod", label: "MODERATOR", hue: 150, f: -1, eq: { hat: "st_modhat", face: "st_shades", back: "st_hammer", trail: "none", hand: "none" }, lines: ["Add something about", "this mod here"] },
+            { name: "CreatorName", role: "creator", label: "CONTENT CREATOR", hue: 340, f: -1, eq: { hat: "cc_cap", face: "none", back: "cc_cam", trail: "none", hand: "none" }, lines: ["Add something about", "this creator here"] }
+        ];
+        MAPS.team = () => {
+            const n = STAFF.length, GAP = 240, X0 = 460, W = Math.max(2000, X0 + Math.max(0, n - 1) * GAP + 360), H = 1000, gy = H - 60, r = rng(9), star = Array.from({ length: 70 }, () => [r() * W, r() * 150, r() * 1.6 + .6, r() * 6]);
+            const RC = { owner: "#ffd23f", mod: "#4fc3ff", creator: "#ff5c5c" }, E0 = { hat: "none", face: "none", back: "none", trail: "none", hand: "none" };
+            const people = STAFF.map((s, i) => ({ s, x: X0 + i * GAP, col: RC[s.role] || "#7dff9a", g: mk({ eq: Object.assign({}, E0, s.eq), r: s.role || "staff", hue: s.hue == null ? 30 : s.hue, f: s.f || 1, nn: 1, name: "" }) }));
+            const fit = (c, s, w, px) => { c.font = "bold " + px + "px Courier New"; while (c.measureText(s).width > w && px > 9) c.font = "bold " + (--px) + "px Courier New" };
+            const wrap = (c, s, w) => { const out = []; let ln = ""; String(s).split(" ").forEach(wd => { if (ln && c.measureText(ln + " " + wd).width > w) { out.push(ln); ln = wd } else ln = ln ? ln + " " + wd : wd }); if (ln) out.push(ln); return out };
+            return {
+                W, H, gy, nr: 1, sky: ["#2a2d4a", "#14152a"], gc: "#3a3a52", gt: "#55557a", sp: [[300, gy - 40]], ent: { lobby: [260, gy - 40] },
+                R: [{ x: -60, y: gy, w: W + 120, h: 120, k: "f" }, { x: -60, y: -60, w: W + 120, h: 60, k: "w" }, { x: -60, y: 0, w: 60, h: H, k: "w" }, { x: W, y: 0, w: 60, h: H, k: "w" }],
+                P: [{ x: 10, y: gy - 190, w: 150, h: 190, to: "lobby", l: "🚪 LOBBY", c: 45, tn: 1, auto: 1, d: -1 }],
+                pre: c => {
+                    const t = performance.now() / 1000; c.textAlign = "center";
+                    star.forEach(s => { c.globalAlpha = .4 + .6 * Math.abs(Math.sin(t + s[3])); c.fillStyle = "#fff"; c.fillRect(s[0], s[1], s[2], s[2]) }); c.globalAlpha = 1;
+                    const wg = c.createLinearGradient(0, 150, 0, gy); wg.addColorStop(0, "#1a1c36"); wg.addColorStop(1, "#2a2e56"); c.fillStyle = wg; c.fillRect(0, 150, W, gy - 150);
+                    c.fillStyle = "#ffffff0d"; for (let x = 0; x < W; x += 200) c.fillRect(x, 158, 6, gy - 158); c.fillStyle = "#0004"; c.fillRect(0, 150, W, 8);
+                    c.strokeStyle = "#0008"; c.lineWidth = 2; c.beginPath(); for (let x = 0; x <= W; x += 20) c.lineTo(x, 40 + Math.sin(x / 90) * 14); c.stroke();
+                    for (let x = 20; x < W; x += 60) { c.fillStyle = HW ? ((x / 60 | 0) % 2 ? "#ff8a1a" : "#a64dff") : `hsl(${(x * 3 + t * 60) % 360},90%,62%)`; c.beginPath(); c.arc(x, 44 + Math.sin(x / 90) * 14, 5, 0, 7); c.fill() }
+                    c.fillStyle = HW ? `hsl(${24 + Math.sin(t * 2) * 12},100%,58%)` : `hsl(${t * 40 % 360},90%,70%)`; c.shadowColor = c.fillStyle; c.shadowBlur = 25; c.font = "bold 70px Courier New"; c.fillText("MEET THE STAFF", W / 2, 290); c.shadowBlur = 0;
+                    c.fillStyle = "#fff8"; c.font = "bold 20px Courier New"; c.fillText("the people who keep goril running", W / 2, 330);
+                    people.forEach((p, i) => {
+                        const x = p.x, s = p.s, top = gy - 400;
+                        const sg = c.createLinearGradient(0, top, 0, gy); sg.addColorStop(0, p.col + "00"); sg.addColorStop(1, p.col + "30"); c.fillStyle = sg; c.beginPath(); c.moveTo(x - 18, top); c.lineTo(x + 18, top); c.lineTo(x + 100, gy); c.lineTo(x - 100, gy); c.fill();
+                        c.fillStyle = "#ffffff0d"; c.beginPath(); c.roundRect(x - 105, top, 210, 400, [18, 18, 0, 0]); c.fill(); c.strokeStyle = p.col + "88"; c.lineWidth = 2; c.stroke();
+                        c.fillStyle = p.col; c.beginPath(); c.roundRect(x - 90, top + 14, 180, 26, 13); c.fill(); fit(c, s.label || String(s.role || "staff").toUpperCase(), 164, 14); c.fillStyle = "#111"; c.fillText(s.label || String(s.role || "staff").toUpperCase(), x, top + 32);
+                        fit(c, s.name || "", 190, 24); c.fillStyle = "#fff"; c.fillText(s.name || "", x, top + 74);
+                        c.font = "12px Courier New"; c.fillStyle = "#fffb"; let ly = top + 100, cnt = 0; (s.lines || []).forEach(l => wrap(c, l, 190).forEach(w => { if (cnt++ < 6) { c.fillText(w, x, ly); ly += 16 } }));
+                        c.fillStyle = "#3b3552"; c.fillRect(x - 46, gy - 26, 92, 26); c.fillStyle = "#6a6a9a"; c.fillRect(x - 46, gy - 26, 92, 5); c.fillStyle = p.col; c.fillRect(x - 46, gy - 6, 92, 3);
+                        const g = p.g; g.t = t; g.x = x; g.y = gy - 49; drawG(g)
                     })
                 }
             }
@@ -1041,7 +1090,7 @@
             const SK = { lobby: ["#1b0f33", "#46205a"], shop: ["#2a0f3a", "#8a3a4a"], forest: ["#120d26", "#7a3a22"], city: ["#0f0a22", "#9a3a2a"], sky: ["#2a1458", "#e8803a"], desert: ["#1d1030", "#c0592a"] };
             if (SK[n]) m.sky = SK[n];
             if (n == "forest") { m.gc = "#261d2e"; m.gt = "#6a5430" } else if (n == "sky") { m.gc = "#d9c6f0"; m.gt = "#f3e8ff" } else if (n == "city") m.gt = "#6a5a70";
-            if (n == "staff") return;
+            if (n == "staff" || n == "team") return;
             // ground decorations (no tall trees in the lobby / shop so they never cover the signs and items)
             for (let x = 120; x < W - 80; x += (n == "shop" ? 135 : 230) * (.6 + r() * .9)) {
                 const k = r(), tall = n != "lobby" && n != "shop" && n != "desert"; if (m.nd && m.nd.some(q => x > q[0] - 30 && x < q[0] + q[1] + 30)) continue;
@@ -1144,7 +1193,7 @@
             (M.cy || []).forEach(q => { if (!q.g && q.x > x0 && q.x < x1) hwCandy(c, q, t) })
         }
         function hwSky() {
-            if (M.n == "staff") return; const c = cx, t = performance.now() / 1000;
+            if (M.n == "staff" || M.n == "team") return; const c = cx, t = performance.now() / 1000;
             if (M.n != "lobby") HWSTARS.forEach(s => { c.globalAlpha = .3 + .5 * Math.abs(Math.sin(t + s[3])); c.fillStyle = "#fff"; c.fillRect(s[0] * W0, s[1] * H0, s[2], s[2]) }); c.globalAlpha = 1;
             const mx = W0 * .82, my = H0 * .2, mr = Math.min(W0, H0) * .08, g = c.createRadialGradient(mx, my, mr * .8, mx, my, mr * 3); g.addColorStop(0, "rgba(255,240,200,.35)"); g.addColorStop(1, "rgba(255,240,200,0)"); c.fillStyle = g; c.fillRect(mx - mr * 3, my - mr * 3, mr * 6, mr * 6);
             c.fillStyle = "#fff1c9"; c.beginPath(); c.arc(mx, my, mr, 0, 7); c.fill(); c.fillStyle = "#e6d29b"; c.beginPath(); c.arc(mx - mr * .3, my - mr * .2, mr * .22, 0, 7); c.arc(mx + mr * .35, my + mr * .25, mr * .16, 0, 7); c.arc(mx + mr * .1, my - mr * .5, mr * .1, 0, 7); c.fill();
@@ -1152,7 +1201,7 @@
         }
         function hwFront() {
             const c = cx, t = performance.now() / 1000;
-            if (M.n != "staff") for (let i = 0; i < 4; i++) { const x = ((t * (14 + i * 6) + i * 500) % (W0 + 600)) - 300, y = H0 * (.55 + .12 * i), g = c.createRadialGradient(x, y, 10, x, y, 260); g.addColorStop(0, "rgba(200,180,255,.10)"); g.addColorStop(1, "rgba(200,180,255,0)"); c.fillStyle = g; c.fillRect(x - 260, y - 260, 520, 520) }
+            if (M.n != "staff" && M.n != "team") for (let i = 0; i < 4; i++) { const x = ((t * (14 + i * 6) + i * 500) % (W0 + 600)) - 300, y = H0 * (.55 + .12 * i), g = c.createRadialGradient(x, y, 10, x, y, 260); g.addColorStop(0, "rgba(200,180,255,.10)"); g.addColorStop(1, "rgba(200,180,255,0)"); c.fillStyle = g; c.fillRect(x - 260, y - 260, 520, 520) }
             const v = c.createRadialGradient(W0 / 2, H0 / 2, Math.min(W0, H0) * .35, W0 / 2, H0 / 2, Math.hypot(W0, H0) * .62); v.addColorStop(0, "rgba(10,0,25,0)"); v.addColorStop(1, "rgba(10,0,25,.55)"); c.fillStyle = v; c.fillRect(0, 0, W0, H0);
             if (scare > 0) { const a = Math.min(1, scare * 2.5); c.globalAlpha = a * .85; c.fillStyle = "#000"; c.fillRect(0, 0, W0, H0); c.globalAlpha = a; c.save(); c.translate(W0 / 2 + (Math.random() - .5) * 14, H0 / 2 + 40 + (Math.random() - .5) * 14); const k = Math.min(W0, H0) / 34; c.scale(k, k); hwGhostBody(c, 1); c.restore(); c.globalAlpha = 1 }
         }
@@ -1205,7 +1254,7 @@
         function load(n, from) {
             M = MAPS[n](); M.n = n; if (HW) hwInit(M); R = M.R; parts = []; G = []; me = mk({ name: S.name, hue: S.hue, eq: S.eq });
             if (!M.nr && !S.online) for (let i = 0; i < S.bots; i++) { const e = {}; for (const c in CAT) e[c] = Math.random() < .5 ? "none" : CAT[c][Math.random() * CAT[c].length | 0][0]; G.push(mk({ bot: 1, name: "goril" + (Math.random() * 99 | 0), hue: Math.random() * 360, eq: e })) }
-            if (ucOn) ucApply(); G.unshift(me); G.forEach(place); me.it = 0; me.tg = 0; lastAlive = null; if (from && M.ent && M.ent[from]) { me.x = M.ent[from][0]; me.y = M.ent[from][1]; const vw0 = W0 / Z; cam.x = Math.max(0, Math.min(M.W - vw0, me.x - vw0 / 2)); cam.y = Math.max(0, Math.min(M.H - 820, me.y - 410)) } rd = { st: "wait", t: 4 }; cd = 1; say(n == "lobby" ? (HW ? "The Spooky Update is here! Grab candy & mystery pumpkins on every map!" : "Welcome! Press M for the menu, E at a portal.") : n == "shop" ? "Welcome to the shop! Stand at an item and press E." : n == "staff" ? "Staff lounge - chill! Press Q for the staff menu." : n == "desert" ? "The Desert! Cracks in the sand lead down into the canyons - and back out again." : "Get ready... infection starts soon!"); net()
+            if (ucOn) ucApply(); G.unshift(me); G.forEach(place); me.it = 0; me.tg = 0; lastAlive = null; if (from && M.ent && M.ent[from]) { me.x = M.ent[from][0]; me.y = M.ent[from][1]; const vw0 = W0 / Z; cam.x = Math.max(0, Math.min(M.W - vw0, me.x - vw0 / 2)); cam.y = Math.max(0, Math.min(M.H - 820, me.y - 410)) } rd = { st: "wait", t: 4 }; cd = 1; say(n == "lobby" ? (HW ? "The Spooky Update is here! Grab candy & mystery pumpkins on every map!" : "Welcome! Press M for the menu, E at a portal.") : n == "shop" ? "Welcome to the shop! Stand at an item and press E." : n == "staff" ? "Staff lounge - chill! Press Q for the staff menu." : n == "team" ? "Meet the staff team!" : n == "desert" ? "The Desert! Cracks in the sand lead down into the canyons - and back out again." : "Get ready... infection starts soon!"); net()
         }
         /* ---------- BOT AI ----------
            Bots are made to feel like decent (not perfect) players: they climb walls/trees by holding W into them,
