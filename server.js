@@ -486,7 +486,7 @@ const GA = (() => {
     const LBL = { speed: "Impossible speed", teleport: "Teleporting", hands: "Impossible arm positions", velocity: "Impossible velocity values", flood: "Update flooding", cosmetic: "Illegal cosmetic", unowned: "Wearing a cosmetic they don't own", staffitem: "Staff-only item", economy: "Coins/candy tampering", bounds: "Outside the map", chat: "Chat spam", report: "Mass reports", fakecmd: "Fake staff command", privesc: "Privilege escalation attempt", restore: "Account-restore brute force", banevade: "Ban evasion attempt", msgflood: "Packet flooding", impersonate: "Staff impersonation", selfmod: "Tampered character size" };
     const IMM = new Set(["staffitem", "fakecmd", "privesc", "banevade", "selfmod", "report"]);
     const rec = new Map(), recent = [], q = [], raws = new Map(), rp = new Map(), acts = new Map();
-    const BOUNDS = { lobby: [2600, 1500], city: [3400, 1700], forest: [3800, 1700], sky: [3400, 1800], staff: [1800, 900] };
+    const BOUNDS = { lobby: [2600, 1500], city: [3400, 1700], forest: [3800, 1700], sky: [3400, 1800], staff: [2800, 1200] };
     const mask = ip => String(ip || "?").replace(/^(\d+\.\d+)\.\d+\.\d+$/, "$1.x.x");
     const post = body => { if (!WEBHOOK3_OK || typeof fetch !== "function") return; if (q.length < 40) q.push(body); };
     setInterval(() => {
@@ -608,6 +608,29 @@ const doCallMod = ws => {
     note(ws, cnt ? "Moderators notified (" + cnt + " online)." : "No mods are online in game - staff were alerted on Discord.");
 };
 
+/* ---------- STAFF ROOM: live ops feed + shared notice board ----------
+   Every 3 s the server sends an "ops" snapshot (online counts, GorilAgent risk, recent staff activity, notes) to staff standing in the staff room.
+   Notes are written from the staff menu (Q > board); they are saved in data/staffnotes.json. Only staff sockets ever receive this. */
+const SNF = dp("staffnotes.json");
+let snotes = readJSON(SNF, []); if (!Array.isArray(snotes)) snotes = [];
+snotes = snotes.filter(x => x && typeof x.txt === "string").slice(-30);
+const saveNotes = () => writeJSON(SNF, snotes);
+const OPS_EV = new Set(["callmod", "agent", "ban", "unban", "kick", "role", "announce", "reportfail", "clamp"]);
+const opsPayload = () => {
+    const o = onlineInfo(), maps = {}, codes = new Set(), staff = [], now = Date.now();
+    for (const k in o.rms) { const i = k.lastIndexOf("-"), code = i > 0 ? k.slice(0, i) : k, map = i > 0 ? k.slice(i + 1) : k; maps[map] = (maps[map] || 0) + o.rms[k]; codes.add(code); }
+    for (const w of wss.clients) if (w.readyState === 1 && w.room && isStaff(w)) { const p = w.room.m.get(w.id); staff.push({ n: p ? p.rn : "?", r: w.role, uc: w.uc ? 1 : 0, m: String(w.rname).split("-").pop() }); }
+    const peak = stats.hist.reduce((a, x) => x[0] > now - 86400000 ? Math.max(a, x[1]) : a, o.total);
+    return {
+        t: "ev", k: "ops", now, on: o.total, uq: o.by.size, peak, codes: codes.size, maps, staff: staff.slice(0, 8),
+        risk: GA.risk().slice(0, 4).map(r => ({ n: r.name, s: r.score })),
+        feed: events.filter(e => OPS_EV.has(e.ty)).slice(-5).reverse().map(e => ({ t: e.t, ty: e.ty, n: e.n, x: str(e.x, 24) })),
+        hist: stats.hist.slice(-60).map(x => x[1]), notes: snotes.slice(-8)
+    };
+};
+const sendOps = () => { let j; for (const w of wss.clients) if (w.readyState === 1 && w.room && /-staff$/.test(w.rname) && isStaff(w)) { j = j || JSON.stringify(opsPayload()); w.send(j); } };
+setInterval(sendOps, 3000);
+
 wss.on("connection", (ws, req) => {
     const ip = (TRUST_PROXY && String(req.headers["x-forwarded-for"] || "").split(",")[0].trim()) || req.socket.remoteAddress || "?";
     if ((ips.get(ip) || 0) >= MAX_PER_IP) { GA.raw("Connection flood", "More than " + MAX_PER_IP + " simultaneous connections from " + GA.mask(ip), 0xe8761a); return ws.close(); }
@@ -633,6 +656,7 @@ wss.on("connection", (ws, req) => {
             R.m.set(ws.id, { ws, cs: newCS(), last: Date.now(), rn: "Monke", s: { x: 0, y: 0, vx: 0, vy: 0, f: 1, h: [14, 16, -14, 16], hu: 30, n: "Monke", e: {}, it: 0, tg: 0 } });
             ws.send(JSON.stringify({ t: "hi", id: ws.id, r: ws.role }));
             sendGrants(ws); onJoin(ws);
+            if (/-staff$/.test(name) && isStaff(ws)) setTimeout(sendOps, 400);
         } else if (m.t === "save" && ws.uh) {
             doSave(ws, m);
         } else if (m.t === "restore" && ws.uh) {
@@ -691,6 +715,14 @@ wss.on("connection", (ws, req) => {
                 ws.send(JSON.stringify({ t: "ev", k: "adminlink", path: "/admin#t=" + t })); logEv("adminlink", ws.uh, me.rn, ""); return;
             }
             if (k === "announce") { const txt = cleanName(m.txt, 80); if (txt) bc(R, { t: "ev", k: "announce", txt }); return; }
+            if (k === "snote") {   // any staff: pin a short note on the staff-room board
+                const txt = cleanName(m.txt, 100); if (!txt) return; const n2 = Date.now(); if (n2 - (ws.sn || 0) < 2000) return note(ws, "Slow down a little.");
+                ws.sn = n2; snotes.push({ t: n2, by: me.rn, r: ws.role, txt }); while (snotes.length > 30) snotes.shift(); saveNotes(); sendOps(); return;
+            }
+            if (k === "snoteclear" || k === "snotedel") {   // OWNER ONLY
+                if (!O) return; if (k === "snoteclear") snotes.length = 0; else { const t = +m.txt, i = snotes.findIndex(x => x.t === t); if (i >= 0) snotes.splice(i, 1); }
+                saveNotes(); sendOps(); return;
+            }
             if (O && !R.lobby && k === "newround") { R.st = "wait"; R.t = 1; R.m.forEach(p => p.s.it = 0); console.log("[staff] owner " + me.rn + " -> new round"); return; }
             if (O && !R.lobby && k === "endround") { if (R.st === "play") { R.st = "end"; R.t = 5; bc(R, { t: "ev", k: "end", last: R.last }); } console.log("[staff] owner " + me.rn + " -> end round"); return; }
             if (k === "give" || k === "revoke") {   // OWNER ONLY. Saved on the server by the target's hashed ID; clients can never add to it.
