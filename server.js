@@ -554,7 +554,7 @@ const GA = (() => {
     const IMM = new Set(["staffitem", "fakecmd", "privesc", "banevade", "selfmod", "report", "tamper", "devtools", "noguard"]);   // these alert Discord at once, whatever the score
     const THR = { altip: 300000, banevade: 0, badword: 0, chatspam: 0, tamper: 0, devtools: 0, noguard: 0 };                                                   // kinds that are logged + sent to Discord EVERY time; the rest are collapsed per 10 s (repeat counts are included)
     const rec = new Map(), recent = [], raws = new Map(), rp = new Map(), acts = new Map(), ipb = new Map();
-    const BOUNDS = { lobby: [2600, 1500], city: [3400, 1700], forest: [3800, 1700], sky: [3400, 1800], desert: [4600, 2100], staff: [2800, 1200] };
+    const BOUNDS = { lobby: [2600, 1500], city: [3400, 1700], forest: [3800, 1700], sky: [3400, 1800], desert: [4600, 2100], staff: [2800, 1200], team: [6000, 1000] };
     const mask = ip => String(ip || "?").replace(/^(\d+\.\d+)\.\d+\.\d+$/, "$1.x.x");
 
     /* ---- Discord delivery: every message is queued, packed up to 10 embeds per request, retried on errors and on Discord rate limits (429). Nothing is silently dropped. ---- */
@@ -799,7 +799,7 @@ wss.on("connection", (ws, req) => {
             // the staff room only lets verified staff in (role comes from the server list, never the client)
             if (/-staff$/.test(name) && !isStaff(ws)) { ws.send(JSON.stringify({ t: "ev", k: "denied" })); return ws.close(); }
             let R = rooms.get(name);
-            if (!R) { if (rooms.size >= MAX_ROOMS) return ws.close(); R = { m: new Map(), st: "wait", t: 3, last: null, chat: [], lobby: /-(lobby|staff|shop)$/.test(name) }; rooms.set(name, R); }
+            if (!R) { if (rooms.size >= MAX_ROOMS) return ws.close(); R = { m: new Map(), st: "wait", t: 3, last: null, chat: [], lobby: /-(lobby|staff|shop|team)$/.test(name) }; rooms.set(name, R); }
             if (R.m.size >= 16) return ws.close();
             ws.room = R; ws.rname = name; ws.gj = Date.now();
             R.m.set(ws.id, { ws, cs: newCS(), last: Date.now(), rn: "Monke", s: { x: 0, y: 0, vx: 0, vy: 0, f: 1, h: [14, 16, -14, 16], hu: 30, n: "Monke", e: {}, it: 0, tg: 0 } });
