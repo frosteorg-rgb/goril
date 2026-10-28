@@ -714,10 +714,10 @@
              lines - extra text under the name (join date, favourite map, anything you like). Long lines wrap, max 6 lines.
            Add / remove people freely - the hall gets wider on its own (about 20 people fit before the anti-cheat map size in server.js needs raising). */
         const STAFF = [
-            { name: "OwnerName", role: "owner", label: "OWNER", hue: 45, f: 1, eq: { hat: "st_ocrown", face: "st_olaser", back: "st_ocape", trail: "none", hand: "none" }, lines: ["Add something about", "the owner here"] },
-            { name: "ModName1", role: "mod", label: "MODERATOR", hue: 210, f: 1, eq: { hat: "st_modhat", face: "st_shades", back: "st_mcape", trail: "none", hand: "st_stick" }, lines: ["Add something about", "this mod here"] },
-            { name: "ModName2", role: "mod", label: "MODERATOR", hue: 150, f: -1, eq: { hat: "st_modhat", face: "st_shades", back: "st_hammer", trail: "none", hand: "none" }, lines: ["Add something about", "this mod here"] },
-            { name: "CreatorName", role: "creator", label: "CONTENT CREATOR", hue: 340, f: -1, eq: { hat: "cc_cap", face: "none", back: "cc_cam", trail: "none", hand: "none" }, lines: ["Add something about", "this creator here"] }
+            { name: "trixie", role: "owner", label: "OWNER", hue: 48, f: 1, eq: { hat: "skullcap", face: "none", back: "st_odragon", trail: "none", hand: "none" }, lines: ["best owner", "ever"] },
+            { name: "lou", role: "mod", label: "MODERATOR", hue: 210, f: 1, eq: { hat: "st_modhat", face: "none", back: "none", trail: "none", hand: "st_stick" }, lines: ["most online", "bum mod"] },
+            { name: "botty", role: "mod", label: "ADMIN", hue: 150, f: -1, eq: { hat: "beanie", face: "vamp", back: "none", trail: "none", hand: "none" }, lines: ["how did he", "become mod?"] },
+            { name: "snowy", role: "creator", label: "CONTENT CREATOR", hue: 340, f: -1, eq: { hat: "cc_cap", face: "none", back: "cc_cam", trail: "none", hand: "none" }, lines: ["wow", "im recording you"] }
         ];
         MAPS.team = () => {
             const n = STAFF.length, GAP = 240, X0 = 460, W = Math.max(2000, X0 + Math.max(0, n - 1) * GAP + 360), H = 1000, gy = H - 60, r = rng(9), star = Array.from({ length: 70 }, () => [r() * W, r() * 150, r() * 1.6 + .6, r() * 6]);
