@@ -548,7 +548,7 @@
 <body>
     <canvas id="c"></canvas>
     <div id="bar"><button class="fb" id="cb">💬 Chat (Enter)</button><button class="fb" id="vb">🎤 Voice: off (V)</button><button class="fb" id="pb">👥 Players (Tab)</button><button class="fb" id="mb">☰ Menu (M)</button><button class="fb" id="sb" hidden>🛡 Staff (Q)</button></div>
-    <div id="tut" hidden style="position:fixed;left:50%;bottom:40px;transform:translateX(-50%);width:min(520px,92%);box-sizing:border-box;background:#f3e9d2;color:#3a2a1c;font-family:Courier New,monospace;border:3px solid #3a2a1c;box-shadow:4px 4px 0 #3a2a1c;padding:14px;z-index:5"><b>Tutorial <span id="tn"></span></b><p id="tt" style="margin:8px 0"></p><button id="tnx">Next</button><button id="tsk">Skip</button></div>
+    <div id="tut" hidden style="position:fixed;right:12px;top:118px;width:min(300px,44%);font-size:13px;opacity:.95;box-sizing:border-box;background:#f3e9d2;color:#3a2a1c;font-family:Courier New,monospace;border:3px solid #3a2a1c;box-shadow:4px 4px 0 #3a2a1c;padding:14px;z-index:5"><b>Tutorial <span id="tn"></span></b><p id="tt" style="margin:8px 0"></p><button id="tnx">Next</button><button id="tsk">Skip</button></div>
     <div id="ch" hidden><input type="text" id="ci" maxlength="120" placeholder="Say something...  (Enter = send, Esc = close)" autocomplete="off"><button id="cs">Send</button></div>
     <div id="pf" class="pnl" hidden>
         <div class="tb"><span>PLAYER</span><span id="pfx" style="cursor:pointer">[x]</span></div>
@@ -572,7 +572,7 @@
             <input type="text" id="code" maxlength="16" placeholder="Room code" style="margin-top:6px">
             <div id="botsrow">Bots: <b id="bn"></b><input type="range" id="bots" min="1" max="12"></div>
             <div class="sec">TRAVEL</div>
-            <div><button data-m="lobby">Lobby</button><button data-m="shop">Shop</button><button data-m="forest">Forest</button><button data-m="city">City</button><button data-m="sky">Sky</button><button data-m="staff" id="mst" hidden>Staff Room</button></div>
+            <div><button data-m="lobby">Lobby</button><button data-m="shop">Shop</button><button data-m="forest">Forest</button><button data-m="city">City</button><button data-m="sky">Sky</button><button data-m="desert">Desert</button><button data-m="staff" id="mst" hidden>Staff Room</button></div>
             <div class="sec">VOICE</div>
             <div><button id="vm0">Off</button><button id="vm1">Push-to-talk</button><button id="vm2">Open mic</button></div>
             <div class="row" style="margin-top:6px"><span>Volume <b id="vvn"></b>%</span><span>Muted: <b id="mun">0</b> <button id="umall">Clear</button></span></div>
@@ -661,7 +661,7 @@
             ].map(a => ({ x: a[0], t: a[1], s: a[2], g: mk({ eq: a[3], r: a[4], hue: a[5], f: a[6], nn: 1, name: "" }) }));
             return {
                 W, H, gy, nr: 1, sky: ["#2a2d4a", "#14152a"], gc: "#3a3a52", gt: "#55557a", sp: [[1250, gy - 40]],
-                ent: { city: [230, gy - 40], forest: [2415, gy - 40], shop: [1550, gy - 40], sky: [1770, gy - 680] },   // where you appear when coming back from a map
+                ent: { city: [230, gy - 40], forest: [2415, gy - 40], shop: [1550, gy - 40], sky: [1770, gy - 680], desert: [1830, gy - 40] },   // where you appear when coming back from a map
                 R: [{ x: -60, y: gy, w: W + 120, h: 120, k: "f" }, { x: -60, y: -60, w: W + 120, h: 60, k: "w" }, { x: -60, y: 0, w: 60, h: H, k: "w" }, { x: W, y: 0, w: 60, h: H, k: "w" },
                 { x: 1960, y: P1, w: 600, h: 18, k: "s", o: 1 }, { x: 0, y: P2, w: 2420, h: 18, k: "s", o: 1 },
                 { x: 2330, y: gy - 420, w: 60, h: 420, k: "ld", hd: 1 },        // ladder up to the display platform
@@ -669,7 +669,8 @@
                 P: [{ x: 10, y: gy - 190, w: 150, h: 190, to: "city", l: "🏙 CITY", c: 215, tn: 1, auto: 1, d: -1 },
                 { x: W - 160, y: gy - 190, w: 150, h: 190, to: "forest", l: "🌲 FOREST", c: 130, tn: 1, auto: 1, d: 1 },
                 { x: 1500, y: gy - 190, w: 100, h: 190, to: "shop", l: "🛍 SHOP", c: 45 },
-                { x: 1710, y: gy - 1230, w: 140, h: 250, to: "sky", l: "☁ SKY", c: 185, tn: "up", auto: 1 }],
+                { x: 1710, y: gy - 1230, w: 140, h: 250, to: "sky", l: "☁ SKY", c: 185, tn: "up", auto: 1 },
+                { x: 1900, y: gy - 190, w: 150, h: 190, to: "desert", l: "🏜 DESERT", c: 32, tn: 1, auto: 1, d: 1 }],
                 V: { x: 1720, y: gy - 115, w: 70, h: 70 },
                 pre: c => {
                     const t = performance.now() / 1000; c.textAlign = "center";
@@ -928,6 +929,99 @@
                 }, P: [{ x: 50, y: gy - 150, w: 90, h: 150, to: "lobby", l: "LOBBY" }]
             }
         };
+        /* ---------- DESERT ----------
+           Sand on top, canyons underneath. Cracks in the sand drop you into canyon chambers; every chamber has more than one crack
+           (climb out of any of them) and the chambers connect through low openings at the bottom.
+           The far-east crack leads to a flooded chamber (swim: W up, S dive) with a buried monument - a teaser for "Underground City".
+           New in this map: swimming (M.Wt water zones), dust-devil updrafts (M.Wd), cracks you can fall through. */
+        MAPS.desert = () => {
+            const W = 4600, H = 2100, sy = 900, cy = 1380, gy = 2000, r = rng(23);
+            const CK = [[330, 140], [880, 140], [1720, 140], [2330, 140], [2930, 140], [3430, 140], [4180, 160]];   // cracks in the sand: [x, width]; the last is the deep one with the pool
+            const BT = [[560, 200, 300], [1180, 240, 240], [2020, 280, 380], [2600, 220, 260], [3150, 240, 340], [3700, 260, 450]];   // buttes: x, width, height above the sand
+            const AR = [[150, 720, 160], [820, 520, 150], [1250, 500, 170], [1600, 640, 150], [1700, 480, 130], [2100, 380, 170], [2310, 250, 150], [2660, 430, 150], [2810, 300, 150], [3190, 270, 170], [3440, 540, 150], [3760, 320, 160], [3980, 210, 150], [4420, 650, 170], [4450, 430, 150]];   // floating rock ledges (one-way)
+            const WD = [[1480, 90], [2835, 60], [3975, 80]];   // dust devils (updrafts)
+            const WT = { x: 3800, y: 1540, w: 800, h: 460 };   // the pool
+            const R = [{ x: -60, y: gy, w: W + 120, h: 160, k: "f" }, { x: -60, y: -60, w: W + 120, h: 60, k: "w" }, { x: -60, y: 0, w: 60, h: H, k: "w" }, { x: W, y: 0, w: 60, h: H, k: "w" }], sp = [];
+            let px = 0; CK.forEach((c, i) => { R.push({ x: px, y: sy, w: c[0] - px, h: cy - sy, k: "sd", s: i }); px = c[0] + c[1] }); R.push({ x: px, y: sy, w: W - px, h: cy - sy, k: "sd", s: 9 });
+            [1300, 2600, 3700].forEach((x, i) => R.push({ x, y: cy, w: 100, h: (i == 2 ? gy - cy : gy - 220 - cy), k: "rk", s: i + 3 }));   // hanging walls between chambers (low opening at the bottom; the last one seals the pool)
+            [[520, 150, 110], [1110, 110, 190], [1900, 170, 130], [2150, 100, 230], [3200, 130, 150]].forEach((a, i) => R.push({ x: a[0], y: gy - a[2], w: a[1], h: a[2], k: "rk", s: i + 11 }));   // rocks on the canyon floor
+            CK.forEach((c, i) => {
+                [60, 170, 280, 390, 500].forEach((o, j) => R.push({ x: ((j + i + 1) & 1) ? c[0] + c[1] - 36 : c[0], y: sy + o, w: 36, h: 14, k: "ar", o: 1 }));   // resting ledges inside every crack (slim, so you can still drop straight down)
+                const cx = c[0] + c[1] / 2;[[-150, 1850], [-90, 1700], [-30, 1550]].forEach(a => R.push({ x: (i & 1) ? cx - a[0] - 110 : cx + a[0], y: a[1], w: 110, h: 14, k: "ar", o: 1 }))   // rock steps in the canyon so you can climb back up to the crack
+            });
+            BT.forEach((b, i) => { R.push({ x: b[0], y: sy - b[2], w: b[1], h: b[2], k: "rk", s: i }); sp.push([b[0] + b[1] / 2, sy - b[2] - 30]) });
+            AR.forEach(a => R.push({ x: a[0], y: a[1], w: a[2], h: 16, k: "ar", o: 1 }));
+            [[1950, sy - 390], [3630, sy - 460]].forEach(a => R.push({ x: a[0], y: a[1], w: 60, h: sy - a[1], k: "ld", hd: 1 }));   // ladders up the two tallest buttes
+            [[3880, 60, 120], [3810, 90, 70], [3990, 110, 80], [4090, 45, 70], [4380, 40, 210], [4420, 80, 130]].forEach(a => R.push({ x: a[0], y: gy - a[1], w: a[2], h: a[1], k: "stn" }));   // pool floor: stones + the monument's two bottom steps
+            [200, 1100, 1560, 1900, 2540, 4050, 4450].forEach(x => sp.push([x, sy - 40]));[300, 1600, 3050].forEach(x => sp.push([x, gy - 40]));
+            // decoration (never collides)
+            const ND = CK.concat(BT.map(b => [b[0], b[1]]), [[1950, 60], [3630, 60], [0, 190], [4130, 40], [200, 60]]);
+            const CT = []; for (let x = 100; x < W - 60; x += 60 + r() * 120) { if (ND.some(q => x > q[0] - 30 && x < q[0] + q[1] + 30)) continue; CT.push([x, sy, .7 + r() * .7, r() * 3 | 0, r() < .4 ? 1 : 0]) }
+            BT.forEach(b => { if (r() < .8) CT.push([b[0] + 40 + r() * (b[1] - 80), sy - b[2], .5 + r() * .4, r() < .5 ? 1 : 2, 1]) });
+            const MS = Array.from({ length: 16 }, (_, i) => [i * 300 + r() * 120 - 60, 160 + r() * 200, 200 + r() * 260]);
+            const ST = []; for (let x = 30; x < W; x += 50 + r() * 70) { if (CK.some(q => x > q[0] - 20 && x < q[0] + q[1] + 20)) continue; ST.push([x, 8 + r() * 14, 18 + r() * 44]) }
+            const CY = Array.from({ length: 26 }, () => [60 + r() * (W - 120), r() < .5 ? 1 : 0, 12 + r() * 18, [170, 280, 30, 190][r() * 4 | 0], r() * 6]);
+            const KP = [3860, 3965, 4075, 4115, 4235, 4540].map(x => [x, 80 + r() * 90, r() * 6]);
+            const cactus = (c, x, y, s, v, t) => {
+                c.fillStyle = "#3d8b4b";
+                if (v == 0) {   // saguaro
+                    const h = 92 * s, w = 17 * s; c.beginPath(); c.roundRect(x - w / 2, y - h, w, h, w / 2); c.fill();
+                    c.beginPath(); c.roundRect(x - w / 2 - 22 * s, y - h * .5, 26 * s, 11 * s, 5 * s); c.fill(); c.beginPath(); c.roundRect(x - w / 2 - 22 * s, y - h * .5 - 30 * s, 11 * s, 41 * s, 5 * s); c.fill();
+                    c.beginPath(); c.roundRect(x + w / 2 - 4 * s, y - h * .68, 24 * s, 11 * s, 5 * s); c.fill(); c.beginPath(); c.roundRect(x + w / 2 + 9 * s, y - h * .68 - 26 * s, 11 * s, 37 * s, 5 * s); c.fill();
+                    c.fillStyle = "#5bad63"; c.fillRect(x - 2 * s, y - h + 7 * s, 3 * s, h - 9 * s); c.fillStyle = "#ff6fa5"; c.beginPath(); c.arc(x, y - h - 1, 4.5 * s, 0, 7); c.fill()
+                } else if (v == 1) {   // barrel cactus
+                    c.beginPath(); c.ellipse(x, y - 17 * s, 21 * s, 18 * s, 0, 0, 7); c.fill(); c.strokeStyle = "#2a6a36"; c.lineWidth = 2; for (let i = -1; i <= 1; i++) { c.beginPath(); c.ellipse(x + i * 8 * s, y - 17 * s, 6 * s, 18 * s, 0, 0, 7); c.stroke() }
+                    c.fillStyle = "#ffd23f"; c.beginPath(); c.arc(x, y - 35 * s, 5 * s, 0, 7); c.fill()
+                } else {   // prickly pear
+                    [[0, -20, .15], [-15, -36, -.5], [16, -33, .45]].forEach(a => { c.beginPath(); c.ellipse(x + a[0] * s, y + a[1] * s, 11 * s, 17 * s, a[2], 0, 7); c.fill() }); c.fillStyle = "#e0457b";[[-15, -52], [16, -49], [0, -38]].forEach(a => { c.beginPath(); c.arc(x + a[0] * s, y + a[1] * s, 3.5 * s, 0, 7); c.fill() })
+                }
+            };
+            return {
+                W, H, gy, sy, R, sp, nd: ND, Wt: [WT], Wd: WD.map(a => ({ x: a[0], y: sy - 540, w: a[1], h: 540 })), sky: ["#e8893c", "#fbe6b0"], gc: "#5a2e22", gt: "#9a6a42",
+                ent: { lobby: [220, sy - 40] }, P: [{ x: 50, y: sy - 150, w: 90, h: 150, to: "lobby", l: "LOBBY" }],
+                tk: () => {
+                    if (!M.mn && Math.hypot(me.x - 4485, me.y - (gy - 120)) < 330) { M.mn = 1; say("🏛 An ancient monument... and a crack beneath it. UNDERGROUND CITY - coming soon!") }
+                    if (!M.wm && inW(me)) { M.wm = 1; say("💧 You can swim! W = up, S = dive, A/D = steer.") }
+                },
+                pre: c => {
+                    const t = performance.now() / 1000, vx0 = cam.x - 80, vx1 = cam.x + W0 / Z + 80;
+                    c.fillStyle = "#ffe9a8"; c.globalAlpha = .18; c.beginPath(); c.arc(3500, 230, 170, 0, 7); c.fill(); c.globalAlpha = .35; c.beginPath(); c.arc(3500, 230, 105, 0, 7); c.fill(); c.globalAlpha = 1; c.fillStyle = "#fff4cf"; c.beginPath(); c.arc(3500, 230, 62, 0, 7); c.fill();
+                    MS.forEach(m => { if (m[0] > vx1 || m[0] + m[1] < vx0) return; c.fillStyle = "#c97a4e"; c.globalAlpha = .5; c.beginPath(); c.moveTo(m[0], sy); c.lineTo(m[0] + m[1] * .18, sy - m[2]); c.lineTo(m[0] + m[1] * .82, sy - m[2]); c.lineTo(m[0] + m[1], sy); c.fill(); c.fillStyle = "#a85a3a"; c.globalAlpha = .35; c.fillRect(m[0] + m[1] * .18, sy - m[2], m[1] * .64, 10); c.globalAlpha = 1 });
+                    const bk = c.createLinearGradient(0, sy, 0, H); bk.addColorStop(0, "#40201a"); bk.addColorStop(.4, "#4a2519"); bk.addColorStop(1, "#1a0b10"); c.fillStyle = bk; c.fillRect(0, sy, W, H - sy);
+                    c.fillStyle = "#0004"; for (let i = 0; i < 40; i++) { const x = (i * 337) % W; if (x > vx0 && x < vx1) c.fillRect(x, cy + 30 + (i * 61) % 400, 90 + (i * 29) % 120, 6) }
+                    CK.forEach(k => { const g2 = c.createLinearGradient(0, sy, 0, gy); g2.addColorStop(0, "rgba(255,226,150,.34)"); g2.addColorStop(1, "rgba(255,226,150,0)"); c.fillStyle = g2; c.beginPath(); c.moveTo(k[0], sy); c.lineTo(k[0] + k[1], sy); c.lineTo(k[0] + k[1] + 110, gy); c.lineTo(k[0] - 110, gy); c.fill() });
+                    c.fillStyle = "#2a1410"; ST.forEach(s => { if (s[0] < vx0 || s[0] > vx1) return; c.beginPath(); c.moveTo(s[0] - s[1], cy); c.lineTo(s[0] + s[1], cy); c.lineTo(s[0], cy + s[2]); c.fill() });
+                    CY.forEach(q => { if (q[0] < vx0 || q[0] > vx1 || q[0] > 3800) return; const y = q[1] ? cy + 10 : gy - 2, d = q[1] ? 1 : -1, s = q[2], p = .5 + .5 * Math.sin(t * 2 + q[4]); c.fillStyle = `hsl(${q[3]},80%,60%)`; c.globalAlpha = .12 + .12 * p; c.beginPath(); c.arc(q[0], y + d * s * .5, s * 2.6, 0, 7); c.fill(); c.globalAlpha = 1; c.beginPath(); c.moveTo(q[0] - s * .35, y); c.lineTo(q[0], y + d * s * 1.5); c.lineTo(q[0] + s * .35, y); c.fill(); c.fillStyle = "#fff6"; c.fillRect(q[0] - 1, y + d * s * .2, 2, d * s * .8) })
+                },
+                dec: c => {
+                    const t = performance.now() / 1000, vx0 = cam.x - 80, vx1 = cam.x + W0 / Z + 80; c.textAlign = "center";
+                    CT.forEach(q => { if (q[0] > vx0 && q[0] < vx1) cactus(c, q[0], q[1], q[2], q[3], t) });
+                    [[1030, 1700, 40], [1900, 2300, 31], [2480, 2920, 47], [3580, 4170, 36]].forEach((a, i) => { const x = a[0] + 40 + ((t * a[2] + i * 130) % (a[1] - a[0] - 80)); if (x < vx0 || x > vx1) return; c.save(); c.translate(x, sy - 15); c.rotate(x / 15); c.strokeStyle = "#8a6a3a"; c.lineWidth = 2; for (let j = 0; j < 5; j++) { c.beginPath(); c.arc(0, 0, 8 + j * 1.6, j, j + 4.2); c.stroke() } c.restore() });
+                    M.Wd.forEach(w => { if (w.x > vx1 || w.x + w.w < vx0) return; c.strokeStyle = "rgba(255,236,190,.55)"; c.lineWidth = 3; for (let i = 0; i < 9; i++) { const k = ((t * .55 + i / 9) % 1), y = sy - k * w.h, a = .5 + .5 * Math.sin(k * 14 + t * 3), wd = w.w * (.35 + .35 * k) * (.7 + .3 * a), cx2 = w.x + w.w / 2 + Math.sin(t * 2 + i) * 8; c.globalAlpha = (1 - k) * .8; c.beginPath(); c.ellipse(cx2, y, wd / 2, 7, 0, 0, 7); c.stroke() } c.globalAlpha = 1; c.fillStyle = "#fff9"; c.font = "bold 12px Courier New"; c.fillText("▲ DUST DEVIL", w.x + w.w / 2, sy - 14) });
+                    const sign = (x, a, b) => { c.fillStyle = "#6b4526"; c.fillRect(x - 3, sy - 52, 6, 52); c.fillStyle = "#e9d8a6"; c.fillRect(x - 78, sy - 100, 156, 50); c.strokeStyle = "#6b4526"; c.lineWidth = 3; c.strokeRect(x - 78, sy - 100, 156, 50); c.fillStyle = "#7a2b1d"; c.font = "bold 14px Courier New"; c.fillText(a, x, sy - 76); c.font = "11px Courier New"; c.fillStyle = "#3a2a1c"; c.fillText(b, x, sy - 58) };
+                    sign(235, "⚠ CRACKS", "they lead underground"); sign(4105, "⚠ DEEP CRACK", "something is down there");
+                    c.fillStyle = "#fff8"; c.font = "bold 13px Courier New"; CK.forEach((k, i) => { if (k[0] > vx0 && k[0] < vx1) c.fillText("▼", k[0] + k[1] / 2, sy - 10 + Math.sin(t * 3 + i) * 4) });
+                    // pool: kelp, buried monument, the crack under it
+                    if (vx1 < WT.x) return;
+                    KP.forEach(k => { c.strokeStyle = "#2f8f5a"; c.lineWidth = 6; c.lineCap = "round"; c.beginPath(); for (let j = 0; j <= 6; j++)c.lineTo(k[0] + Math.sin(t * 1.6 + k[2] + j * .7) * (j * 3.2), gy - j * k[1] / 6); c.stroke(); c.lineCap = "butt" });
+                    c.fillStyle = "#05030a"; c.beginPath(); c.moveTo(4318, gy); c.lineTo(4345, gy + 30); c.lineTo(4332, gy + 62); c.lineTo(4366, gy + 92); c.lineTo(4384, gy + 60); c.lineTo(4372, gy + 28); c.lineTo(4398, gy); c.closePath(); c.fill();
+                    c.fillStyle = `rgba(90,255,230,${.28 + .16 * Math.sin(t * 2)})`; c.beginPath(); c.moveTo(4352, gy + 4); c.lineTo(4360, gy + 62); c.lineTo(4372, gy + 4); c.fill();
+                    c.save(); c.translate(4485, gy - 80); c.rotate(-.07); c.fillStyle = "#5b7d86"; c.beginPath(); c.moveTo(-34, 0); c.lineTo(-22, -230); c.lineTo(0, -262); c.lineTo(22, -230); c.lineTo(34, 0); c.closePath(); c.fill();
+                    c.fillStyle = "#7aa6af"; c.beginPath(); c.moveTo(-34, 0); c.lineTo(-22, -230); c.lineTo(-10, -240); c.lineTo(-14, 0); c.closePath(); c.fill();
+                    for (let i = 0; i < 6; i++) { c.fillStyle = `rgba(120,255,235,${.35 + .3 * Math.sin(t * 2 + i)})`; c.fillRect(-7, -40 - i * 34, 14, 8) } c.restore();
+                    c.save(); c.translate(4560, gy - 40); c.rotate(.5); c.fillStyle = "#4d6d75"; c.fillRect(-9, -70, 18, 70); c.fillStyle = "#6b919a"; c.fillRect(-12, -78, 24, 10); c.restore()
+                },
+                fg: c => {
+                    const t = performance.now() / 1000, vx1 = cam.x + W0 / Z; if (vx1 < WT.x || cam.x > WT.x + WT.w) return;
+                    const g2 = c.createLinearGradient(0, WT.y, 0, WT.y + WT.h); g2.addColorStop(0, "rgba(90,200,235,.30)"); g2.addColorStop(1, "rgba(8,40,100,.62)"); c.fillStyle = g2; c.fillRect(WT.x, WT.y, WT.w, WT.h);
+                    c.fillStyle = "rgba(220,250,255,.10)"; for (let i = 0; i < 7; i++) { const x = WT.x + 60 + i * 110 + Math.sin(t * .6 + i) * 25; c.beginPath(); c.moveTo(x, WT.y); c.lineTo(x + 40, WT.y); c.lineTo(x + 10, WT.y + WT.h * .8); c.lineTo(x - 50, WT.y + WT.h * .8); c.fill() }
+                    c.strokeStyle = "rgba(210,248,255,.85)"; c.lineWidth = 3; c.beginPath(); for (let x = WT.x; x <= WT.x + WT.w; x += 20)c.lineTo(x, WT.y + Math.sin(x / 40 + t * 2.2) * 3); c.stroke();
+                    const d = Math.hypot(me.x - 4485, me.y - (gy - 80));
+                    if (d < 420) { c.globalAlpha = Math.min(1, (420 - d) / 220); c.textAlign = "center"; c.fillStyle = "#9ffff0"; c.font = "bold 15px Courier New"; c.fillText("UNDERGROUND CITY", 4485, gy - 300); c.font = "12px Courier New"; c.fillText("- coming soon -", 4485, gy - 282); c.globalAlpha = 1 }
+                }
+            }
+        };
+
         let AC; function snd(f, d = .1, ty = "square") { try { AC = AC || new AudioContext(); const o = AC.createOscillator(), v = AC.createGain(); o.type = ty; o.frequency.value = f; v.gain.value = .05; o.connect(v); v.connect(AC.destination); o.start(); v.gain.exponentialRampToValueAtTime(.001, AC.currentTime + d); o.stop(AC.currentTime + d) } catch (e) { } }
         /* ---------- HALLOWEEN UPDATE ----------
            Auto-enabled Oct 1 - Nov 7. Force it with ?halloween=1 (or turn it off with ?halloween=0) in the URL.
@@ -944,20 +1038,20 @@
         function hwUnlock() { HWL.forEach(u => { if ((S.candy | 0) >= u.lk && !S.own[u.id]) { S.own[u.id] = 1; say("🎃 Unlocked " + u.n + "! Equip it in the Shop"); snd(1000, .3, "triangle") } }); save() }
         function hwInit(m) {
             const n = m.n, r = rng(n.length * 977 + n.charCodeAt(0) * 31), W = m.W, gy = m.gy, D = m.hw = [], ph = () => r() * 6.28; m.cy = [];
-            const SK = { lobby: ["#1b0f33", "#46205a"], shop: ["#2a0f3a", "#8a3a4a"], forest: ["#120d26", "#7a3a22"], city: ["#0f0a22", "#9a3a2a"], sky: ["#2a1458", "#e8803a"] };
+            const SK = { lobby: ["#1b0f33", "#46205a"], shop: ["#2a0f3a", "#8a3a4a"], forest: ["#120d26", "#7a3a22"], city: ["#0f0a22", "#9a3a2a"], sky: ["#2a1458", "#e8803a"], desert: ["#1d1030", "#c0592a"] };
             if (SK[n]) m.sky = SK[n];
             if (n == "forest") { m.gc = "#261d2e"; m.gt = "#6a5430" } else if (n == "sky") { m.gc = "#d9c6f0"; m.gt = "#f3e8ff" } else if (n == "city") m.gt = "#6a5a70";
             if (n == "staff") return;
             // ground decorations (no tall trees in the lobby / shop so they never cover the signs and items)
             for (let x = 120; x < W - 80; x += (n == "shop" ? 135 : 230) * (.6 + r() * .9)) {
-                const k = r(), tall = n != "lobby" && n != "shop";
-                D.push(k < .45 ? { k: "pump", x, y: gy, s: .8 + r() * .7, p: ph() } : k < .75 || !tall ? { k: "stone", x, y: gy, s: .8 + r() * .4, v: r() * 3 | 0 } : { k: "tree", x, y: gy, s: .9 + r() * .6, v: r() })
+                const k = r(), tall = n != "lobby" && n != "shop" && n != "desert"; if (m.nd && m.nd.some(q => x > q[0] - 30 && x < q[0] + q[1] + 30)) continue;
+                D.push(k < .45 ? { k: "pump", x, y: m.sy || gy, s: .8 + r() * .7, p: ph() } : k < .75 || !tall ? { k: "stone", x, y: m.sy || gy, s: .8 + r() * .4, v: r() * 3 | 0 } : { k: "tree", x, y: m.sy || gy, s: .9 + r() * .6, v: r() })
             }
             m.R.forEach(b => { if ((b.k == "s" || b.k == "p" || b.k == "b") && b.w > 90 && r() < .3) D.push({ k: "pump", x: b.x + 25 + r() * (b.w - 50), y: b.y, s: .6 + r() * .4, p: ph() }) });
             for (let i = 0, ng = n == "lobby" ? 4 : n == "shop" ? 3 : 7; i < ng; i++) D.push({ k: "ghost", x: r() * W, y: gy - 250 - r() * (Math.min(m.H, 1400) - 500), s: .8 + r() * .6, p: ph() });
             D.push({ k: "web", x: 0, y: 0, d: 1 }, { k: "web", x: W, y: 0, d: -1 });
             // candy hunt: candy on platforms / roofs / ground, plus a few mystery pumpkins
-            const cn = n == "lobby" ? 10 : n == "shop" ? 0 : 16, pn = n == "lobby" ? 1 : n == "shop" ? 0 : 3, S2 = m.R.filter(b => ["f", "s", "p", "br", "b", "l"].includes(b.k) && b.w > 40);
+            const cn = n == "lobby" ? 10 : n == "shop" ? 0 : 16, pn = n == "lobby" ? 1 : n == "shop" ? 0 : 3, S2 = m.R.filter(b => ["f", "s", "p", "br", "b", "l", "sd", "ar"].includes(b.k) && b.w > 40);
             for (let i = 0; i < cn + pn && S2.length; i++) for (let t = 0; t < 14; t++) {
                 const b = S2[Math.random() * S2.length | 0], x = b.x + 20 + Math.random() * Math.max(1, b.w - 40), y = b.y - 34;
                 if (m.cy.some(q => Math.hypot(q.x - x, q.y - y) < 120)) continue;
@@ -1070,6 +1164,7 @@
             return m == l ? { nx: -1, ny: 0, p: r + l } : m == rr ? { nx: 1, ny: 0, p: r + rr } : m == t ? { nx: 0, ny: -1, p: r + t } : { nx: 0, ny: 1, p: r + bt }
         }
         const mk = o => Object.assign({ x: 0, y: 0, vx: 0, vy: 0, ph: 0, f: 1, it: 0, t: 0, bot: 0, name: "", hue: 30, eq: { hat: "none", face: "none", back: "none", trail: "none" }, h: [{ x: 14, y: 16, px: 14, py: 16 }, { x: -14, y: 16, px: -14, py: 16 }] }, o);
+        function inW(g) { if (!M.Wt) return 0; for (const w of M.Wt) if (g.x > w.x && g.x < w.x + w.w && g.y > w.y && g.y < w.y + w.h) return 1; return 0 }
         function step(g, n, dt) {
             const sz = g.sz || 1, sm = g.sm || 1, jm = g.jm || 1;   // owner-only self effects: body size, run speed, jump power
             const dx = (n.d ? 1 : 0) - (n.a ? 1 : 0), m = n.w ? 1 : dx ? 2 : n.s ? 3 : 0; if (dx) g.f = dx; if (m != g.pm) { g.pm = m; g.rp = 0 } g.rp = Math.min(1, (g.rp || 0) + dt / .1);
@@ -1082,7 +1177,11 @@
                 else if (m == 3) { tx = sd * 26; ty = 32 } else { tx = sd * 14; ty = 16 }
                 tx *= sz; ty *= sz; h.px = h.x; h.py = h.y; h.x += (tx - h.x) * k; h.y += (ty - h.y) * k
             });
-            g.vy += 1500 * (g.gm == null ? 1 : g.gm) * dt; g.vx *= 1 - .1 * dt; if (dx && g.vx * dx < (m == 1 ? 550 : 350) * sm) g.vx += dx * (m == 1 ? 900 : 500) * sm * dt; g.x += g.vx * dt; g.y += g.vy * dt; let fl = 0;
+            const sw = inW(g); g.sw = sw;
+            if (sw) { g.vy += 1500 * (g.gm == null ? 1 : g.gm) * dt * .16; if (n.w) g.vy -= 2400 * dt; if (n.s) g.vy += 1800 * dt; g.vy *= 1 - 3.2 * dt; g.vx *= 1 - 2.2 * dt; if (dx) g.vx += dx * 900 * dt }   // swimming: floaty, W = up, S = dive
+            else g.vy += 1500 * (g.gm == null ? 1 : g.gm) * dt;
+            if (M.Wd) for (const w of M.Wd) if (g.x > w.x && g.x < w.x + w.w && g.y > w.y && g.y < w.y + w.h) { g.vy -= 3100 * dt; if (g.vy < -600) g.vy = -600 }   // dust-devil updraft
+            g.vx *= 1 - .1 * dt; if (dx && g.vx * dx < (m == 1 ? 550 : 350) * sm) g.vx += dx * (m == 1 ? 900 : 500) * sm * dt; g.x += g.vx * dt; g.y += g.vy * dt; let fl = 0;
             for (const b of R) { if (b.hd || b.o && (g.vy < 0 || g.y > b.y)) continue; const c = hit(g.x, g.y, 16 * sz, b); if (c) { g.x += c.nx * c.p; g.y += c.ny * c.p; const v = g.vx * c.nx + g.vy * c.ny; if (v < 0) { g.vx -= v * c.nx; g.vy -= v * c.ny } if (c.ny < -.5) fl = 1 } }
 
             g.h.forEach(h => {
@@ -1096,6 +1195,7 @@
                     }
                 }
             });
+            if (sw) { const q = Math.hypot(g.vx, g.vy); if (q > 430) { g.vx *= 430 / q; g.vy *= 430 / q } }
             if (fl && m != 1 && m != 2) g.vx *= 1 - (m == 3 ? 25 : 14) * dt; const sp = Math.hypot(g.vx, g.vy), mx = 1500 * Math.max(jm, sm); if (sp > mx) { g.vx *= mx / sp; g.vy *= mx / sp }
         }
         /* ---------- GAME STATE ---------- */
@@ -1105,7 +1205,7 @@
         function load(n, from) {
             M = MAPS[n](); M.n = n; if (HW) hwInit(M); R = M.R; parts = []; G = []; me = mk({ name: S.name, hue: S.hue, eq: S.eq });
             if (!M.nr && !S.online) for (let i = 0; i < S.bots; i++) { const e = {}; for (const c in CAT) e[c] = Math.random() < .5 ? "none" : CAT[c][Math.random() * CAT[c].length | 0][0]; G.push(mk({ bot: 1, name: "goril" + (Math.random() * 99 | 0), hue: Math.random() * 360, eq: e })) }
-            if (ucOn) ucApply(); G.unshift(me); G.forEach(place); me.it = 0; me.tg = 0; lastAlive = null; if (from && M.ent && M.ent[from]) { me.x = M.ent[from][0]; me.y = M.ent[from][1]; const vw0 = W0 / Z; cam.x = Math.max(0, Math.min(M.W - vw0, me.x - vw0 / 2)); cam.y = Math.max(0, Math.min(M.H - 820, me.y - 410)) } rd = { st: "wait", t: 4 }; cd = 1; say(n == "lobby" ? (HW ? "The Spooky Update is here! Grab candy & mystery pumpkins on every map!" : "Welcome! Press M for the menu, E at a portal.") : n == "shop" ? "Welcome to the shop! Stand at an item and press E." : n == "staff" ? "Staff lounge - chill! Press Q for the staff menu." : "Get ready... infection starts soon!"); net()
+            if (ucOn) ucApply(); G.unshift(me); G.forEach(place); me.it = 0; me.tg = 0; lastAlive = null; if (from && M.ent && M.ent[from]) { me.x = M.ent[from][0]; me.y = M.ent[from][1]; const vw0 = W0 / Z; cam.x = Math.max(0, Math.min(M.W - vw0, me.x - vw0 / 2)); cam.y = Math.max(0, Math.min(M.H - 820, me.y - 410)) } rd = { st: "wait", t: 4 }; cd = 1; say(n == "lobby" ? (HW ? "The Spooky Update is here! Grab candy & mystery pumpkins on every map!" : "Welcome! Press M for the menu, E at a portal.") : n == "shop" ? "Welcome to the shop! Stand at an item and press E." : n == "staff" ? "Staff lounge - chill! Press Q for the staff menu." : n == "desert" ? "The Desert! Cracks in the sand lead down into the canyons - and back out again." : "Get ready... infection starts soon!"); net()
         }
         /* ---------- BOT AI ----------
            Bots are made to feel like decent (not perfect) players: they climb walls/trees by holding W into them,
@@ -1209,11 +1309,13 @@
                 step(g, ins[i], dt / 3 * (g == me ? sl : 1))
             });
             G.forEach(g => {
-                g.t += dt; if (g.net) { const k = Math.min(1, dt * 15); g.x += (g.tx - g.x) * k; g.y += (g.ty - g.y) * k; if (g.th) g.h.forEach((h, i) => { h.x = g.th[i * 2]; h.y = g.th[i * 2 + 1] }) } else if (g.y > M.H + 200) place(g);
+                g.t += dt;
+                if (M.Wt) { const iw = inW(g) ? 1 : 0; if (iw != (g.sw0 | 0)) { g.sw0 = iw; if (Math.abs(g.vy) > 200 || g.net) { for (let i = 0; i < 10; i++)parts.push({ x: g.x + (Math.random() - .5) * 30, y: M.Wt[0].y, vx: (Math.random() - .5) * 160, vy: -60 - Math.random() * 120, l: .7, c: "#cfeeff", s: 3 + Math.random() * 2 }); if (g == me) snd(iw ? 260 : 420, .18, "sine") } } if (iw && Math.random() < dt * 6) parts.push({ x: g.x + (Math.random() - .5) * 20, y: g.y - 8, vx: 0, vy: -50 - Math.random() * 40, l: .9, c: "#d8f4ff", s: 2 + Math.random() * 2 }) }
+                if (g.net) { const k = Math.min(1, dt * 15); g.x += (g.tx - g.x) * k; g.y += (g.ty - g.y) * k; if (g.th) g.h.forEach((h, i) => { h.x = g.th[i * 2]; h.y = g.th[i * 2 + 1] }) } else if (g.y > M.H + 200) place(g);
                 const tr = (g.r || !String(g.eq.trail).startsWith("st_")) ? g.eq.trail : "none"; if (tr != "none" && Math.hypot(g.vx, g.vy) > 120 && Math.random() < .7) parts.push({ x: g.x, y: g.y, vx: (Math.random() - .5) * 40, vy: tr == "fire" || tr == "ember" || tr == "witchfire" ? -50 : tr == "bubble" || tr == "wisp" ? -30 : (Math.random() - .5) * 40, l: .7, c: TC(tr, g.t), s: tr == "bubble" || tr == "wisp" || tr == "st_ogalaxy" ? 6 : 4 })
             });
             parts.forEach(p => { p.x += p.vx * dt; p.y += p.vy * dt; p.l -= dt }); parts = parts.filter(p => p.l > 0);
-            hwTick(dt); zoneTick(); cd -= dt; if (cd <= 0 && !op) for (const p of M.P) if ((keys.e || p.auto) && me.x > p.x && me.x < p.x + p.w && me.y > p.y && me.y < p.y + p.h) { load(p.to, M.n); return }
+            hwTick(dt); zoneTick(); if (M.tk) M.tk(dt); cd -= dt; if (cd <= 0 && !op) for (const p of M.P) if ((keys.e || p.auto) && me.x > p.x && me.x < p.x + p.w && me.y > p.y && me.y < p.y + p.h) { load(p.to, M.n); return }
             if (!M.nr) (RM ? oround : round)(dt); sync(); if (RM) RM.presence({ x: me.x | 0, y: me.y | 0, vx: me.vx | 0, vy: me.vy | 0, f: me.f, h: [me.h[0].x | 0, me.h[0].y | 0, me.h[1].x | 0, me.h[1].y | 0], hu: me.hue | 0, n: me.name, e: me.eq, it: me.it, tg: me.tg || 0, z: me.sz || 1 });
             msgT -= dt
         }
@@ -1268,10 +1370,19 @@
             rd.bt = (rd.bt || 0) - dt; if (ch || rd.bt <= 0) { rd.bt = 1; RM.emit("rd", { st: rd.st, t: rd.t, pick: pk }) }
         }
         /* ---------- TUTORIAL ---------- */
-        const TS = ["Welcome to goril! You move with your ARMS - your hands push you off any surface.", "Hold A or D to swing your arms and run. Try it now!", "Hold W or Space to slam your hands down and jump. Hold W against a wall, tree or ladder to climb it - trees and ladders are only solid while you hold W!", "S plants your hands to brake. E uses portals and buys items, M opens the menu, R respawns (lobby only), L goes to the lobby, H shows this help again.", "Chat: press Enter or T to type. Voice: pick Push-to-talk or Open mic in the menu (Online only) - you hear players near you. Click a player (or press Tab) to mute, report or check them.", "Press M for the menu (name, color, online mode). Buy cosmetics in the Shop portal in the lobby. Have fun!"];
+        const TS = ["Welcome to goril! You move with your ARMS - your hands push you off any surface.", "Hold A or D to swing your arms and run. Try it now!", "Hold W or Space to slam your hands down and jump. Hold W against a wall, tree or ladder to climb it - trees and ladders are only solid while you hold W!", "S plants your hands to brake. E uses portals and buys items, M opens the menu, R respawns (lobby only), L goes to the lobby, H shows this help again.", "Chat: press Enter or T to type. Voice: pick Push-to-talk or Open mic in the menu (Online only) - you hear players near you. Click a player (or press Tab) to mute, report or check them.", "DESERT: cracks in the sand drop you into the canyons below - climb out of any crack. In water hold W to swim up, S to dive. Orange dust devils lift you into the air!", "Press M for the menu (name, color, online mode). Buy cosmetics in the Shop portal in the lobby. Have fun!"];
         if (HW) TS.splice(4, 0, "HALLOWEEN: collect candy 🍬 on every map (+1 coin each). Mystery pumpkins give a random TRICK or TREAT. Reach 30 / 60 / 100 candy to unlock exclusive cosmetics in the Shop!"); let ti = -1; function tut(i) { ti = i; const t = $("tut"); if (i < 0 || i >= TS.length) { t.hidden = true; ti = -1; S.tut = 1; save(); return } t.hidden = false; $("tt").textContent = TS[i]; $("tn").textContent = (i + 1) + "/" + TS.length }
         /* ---------- DRAWING ---------- */
         const COL = { f: null, w: "#1a1a28", d: "#7b5a3a", s: "#8a6a4a", p: "#6c7a89", t: "#5a3b22", br: "#6b4526", l: "#6b4526" };
+        function dRock(b) {   // desert sandstone: strata bands, sunny top edge, dark side edges
+            const c = cx, K = { sd: ["#c78d52", "#b27a44", "#ecc57f"], rk: ["#a8532c", "#8f4524", "#d4804f"], ar: ["#b9683a", "#9d5630", "#e08f5a"], stn: ["#56777f", "#46636b", "#7eaab2"] }[b.k], s = b.s | 0;
+            c.fillStyle = K[0]; c.fillRect(b.x, b.y, b.w, b.h);
+            if (b.h > 40) { c.fillStyle = K[1]; for (let y = b.y + 18 + (s * 7) % 22; y < b.y + b.h - 6; y += 36)c.fillRect(b.x, y, b.w, 8 + ((y / 36 | 0) % 3) * 3) }
+            if (b.k == "rk" && b.h > 120) { c.fillStyle = "#0003"; for (let i = 0; i < 3; i++) { const x = b.x + b.w * (.2 + .3 * i) + (s * 13 + i * 29) % 17; c.fillRect(x, b.y + 20 + i * 14, 3, Math.min(b.h - 30, 120 + i * 40)) } }
+            c.fillStyle = "#0002"; c.fillRect(b.x, b.y, 5, b.h); c.fillRect(b.x + b.w - 5, b.y, 5, b.h);
+            c.fillStyle = K[2]; c.fillRect(b.x, b.y, b.w, b.k == "sd" ? 12 : 5);
+            if (b.k == "sd") { c.fillStyle = "#0003"; c.fillRect(b.x, b.y + b.h - 8, b.w, 8) }
+        }
         function dR(b) {
             const c = cx;
             if (b.k == "f") { c.fillStyle = M.gc; c.fillRect(b.x, b.y, b.w, b.h); c.fillStyle = M.gt; c.fillRect(b.x, b.y, b.w, 10); return }
@@ -1280,6 +1391,7 @@
                 for (let wy = b.y + 20; wy < b.y + b.h - 30; wy += 34) { if (wy < cam.y - 40 || wy > cam.y + 840) continue; for (let wx = b.x + 14; wx < b.x + b.w - 24; wx += 30) { c.fillStyle = ((wx / 30 | 0) * 7 + (wy / 34 | 0) * 3 + b.s) % 5 < 2 ? "#ffd86b" : "#222a3a"; c.fillRect(wx, wy, 16, 20) } }
                 c.fillStyle = "#fff2"; c.fillRect(b.x, b.y, b.w, 5); return
             }
+            if (b.k == "sd" || b.k == "rk" || b.k == "ar" || b.k == "stn") return dRock(b);
             if (b.k == "inv" || b.k == "bn") return;
             if (b.k == "mz") { c.fillStyle = "#3a2a5a"; c.fillRect(b.x, b.y, b.w, b.h); c.fillStyle = "#b57bff"; c.fillRect(b.x, b.y, b.w, 4); c.fillStyle = "#ffffff18"; for (let x = b.x + 20; x < b.x + b.w - 20; x += 40) c.fillRect(x, b.y + 8, 18, 3); return }
             if (b.k == "ld") { c.fillStyle = "#7a5a30"; c.fillRect(b.x + 4, b.y, 7, b.h); c.fillRect(b.x + b.w - 11, b.y, 7, b.h); c.fillStyle = "#a6824a"; for (let y = b.y + 10; y < b.y + b.h; y += 26) c.fillRect(b.x + 8, y, b.w - 16, 6); c.fillStyle = "#fff3"; c.fillRect(b.x + 4, b.y, 2, b.h); c.fillRect(b.x + b.w - 11, b.y, 2, b.h); return }
@@ -1401,7 +1513,7 @@
             R.forEach(b => { if (b.x + b.w > cam.x - 50 && b.x < cam.x + vw + 50) dR(b) }); if (HW) hwWorld(c, vw);
             M.P.forEach(portal); if (M.V) drawVent(M.V); if (M.dec) M.dec(c);
             parts.forEach(p => { c.globalAlpha = p.l; c.fillStyle = p.c; c.beginPath(); c.arc(p.x, p.y, p.s, 0, 7); c.fill() }); c.globalAlpha = 1;
-            G.forEach(g => g != me && drawG(g)); if (fpOn) drawHands(c, me); else drawG(me);
+            G.forEach(g => g != me && drawG(g)); if (fpOn) drawHands(c, me); else drawG(me); if (M.fg) M.fg(c);
 
             c.restore();
             if (HW) hwFront(); if (cleanOn) return requestAnimationFrame(frame); drawChat(c); hudV(c); c.fillStyle = "#fff"; c.font = "bold 17px sans-serif"; c.textAlign = "left"; c.fillText("🪙 " + S.coins + (HW ? "   🍬 " + (S.candy | 0) + (M.cy && M.cy.length ? " (" + M.cy.filter(q => !q.g).length + " here)" : "") : "") + "   📍 " + M.n.toUpperCase() + "   " + (me.it ? "🔥 YOU ARE IT" : "") + (RM ? "   🌐 " + (S.code || "public") + " (" + (Object.keys(OG).length + 1) + " players)" : S.online ? "   🌐 connecting..." : ""), 16, 28);
