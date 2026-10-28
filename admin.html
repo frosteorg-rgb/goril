@@ -380,7 +380,6 @@
                 <button data-tab="over" class="on">Overview</button>
                 <button data-tab="players">Players</button>
                 <button data-tab="tools">Tools</button>
-                <button data-tab="testmm">Test mod menu</button>
             </nav>
             <div class="sp"></div>
             <span class="hint" id="upd"></span>
@@ -424,154 +423,12 @@
                     </div>
                 </div>
             </section>
-            <section id="t-testmm" hidden>
-                <div class="card">
-                    <h2>Test mod menu (anti-cheat test tool)</h2>
-                    <div class="hint" style="margin-bottom:10px">An external cheat menu that runs <b>outside</b> the game, like one a player would sneak in. It hooks the browser's WebSocket and edits the packets the game sends. Nothing in index.html or server.js is changed. Give the script only to your own test account.</div>
-                    <div class="row2"><button class="pri" id="tmmc">Copy script</button><button id="tmmd">Download .user.js</button><button id="tmmb">Copy bookmarklet</button></div>
-                    <div class="hint" style="margin-top:10px"><b>How to use:</b> open the game on the test account, press F12, open Console, paste the script, press Enter. The menu appears on the right (Insert key hides it). Or install the .user.js with Tampermonkey (it runs at document-start so it hooks before the game connects). Pasting it again toggles the menu.</div>
-                </div>
-                <div class="card" style="margin-top:12px">
-                    <h2>What each cheat should trigger in GorilAgent</h2>
-                    <div class="wrap">
-                        <table>
-                            <tr><th>Cheat</th><th>Expected flag</th></tr>
-                            <tr><td>Tag aura, Anti-tag evade</td><td>Teleporting</td></tr>
-                            <tr><td>Speed hack</td><td>Impossible speed</td></tr>
-                            <tr><td>Fake velocity</td><td>Impossible velocity values</td></tr>
-                            <tr><td>Out of map</td><td>Outside the map</td></tr>
-                            <tr><td>Giant reach arms</td><td>Impossible arm positions</td></tr>
-                            <tr><td>Size slider</td><td>Tampered character size</td></tr>
-                            <tr><td>Wear item (try <code>st_ocrown</code> or a made-up name)</td><td>Staff-only item / illegal cosmetic</td></tr>
-                            <tr><td>Fake name (<code>[MOD] Monke</code>)</td><td>Staff impersonation</td></tr>
-                            <tr><td>Update flood</td><td>Update flooding (6x may hit packet flooding and disconnect)</td></tr>
-                            <tr><td>Chat spam</td><td>Chat spam</td></tr>
-                            <tr><td>Radar (ESP)</td><td>Nothing: it is purely client side, so it cannot be detected by packets</td></tr>
-                        </table>
-                    </div>
-                    <div class="hint" style="margin-top:8px"><b>Important:</b> the server skips the movement checks (speed, teleport, arms, velocity, flood) for anyone with a staff role. For a real test use a <b>non-staff</b> account. A staff account will mostly show up clean, which says nothing about the anti-cheat. Watch the <b>Activity</b> feed on Overview and your anti-cheat Discord channel. The menu's own log also shows when the server kicks or bans you.</div>
-                </div>
-            </section>
         </main>
     </div>
 
     <div id="modal" class="modal" hidden><div id="mbody"></div></div>
     <div id="toast"></div>
 
-    <script type="text/plain" id="tmm-src">
-        /* goril TEST MOD MENU - anti-cheat test tool. Paste into the browser console (F12) of the game tab, or run as a userscript / bookmarklet.
-           It lives OUTSIDE the game: it hooks the WebSocket and edits the packets the game sends, like a real third-party cheat would. */
-        (() => {
-            if (window.__tmm) { window.__tmm.toggle(); return; }
-            const S = { speed: 1, tag: 0, evade: 0, reach: 0, vel: 0, flood: 1, size: 1, item: "", name: "", oob: 0, spam: 0 };
-            const off = { x: 0, y: 0 }; let sock = null, myId = null, players = [], lt = performance.now(), sent = 0, shown = 1;
-            let L = null, box = null; const seen = new WeakSet(), send0 = WebSocket.prototype.send, logs = [];
-            const log = t => { logs.unshift(new Date().toLocaleTimeString() + "  " + t); logs.length = 40; if (L) L.textContent = logs.join("\n"); };
-            const me = () => players.find(p => p.id === myId);
-
-            const mod = d => {
-                const n = performance.now(), dt = Math.min(0.2, (n - lt) / 1000); lt = n;
-                const m = me();
-                if (S.speed > 1) { off.x += (d.vx || 0) * dt * (S.speed - 1); off.y += (d.vy || 0) * dt * (S.speed - 1); }   // speed hack: server-side position runs ahead of the real one
-                d.x += off.x; d.y += off.y;
-                if (S.tag && m && m.it) {                                                                                    // tag aura: report a position right on top of the nearest runner
-                    let b = null, bd = 1e9; for (const p of players) if (p.id !== myId && !p.it) { const q = Math.hypot(p.x - d.x, p.y - d.y); if (q < bd) { bd = q; b = p; } }
-                    if (b) { d.x = b.x + 8; d.y = b.y; }
-                }
-                if (S.evade && m && !m.it) {                                                                                 // anti-tag: jump away whenever the tagger gets close
-                    for (const p of players) if (p.it && Math.hypot(p.x - d.x, p.y - d.y) < 160) { const a = Math.atan2(d.y - p.y, d.x - p.x); d.x += Math.cos(a) * 320; d.y += Math.sin(a) * 320; break; }
-                }
-                if (S.reach) d.h = [160, 160, -160, 160];                                                                    // impossible arm offsets
-                if (S.vel) { d.vx = 2600; d.vy = 0; }                                                                        // impossible reported velocity
-                if (S.size !== 1) d.z = S.size;                                                                              // character size (owner-only)
-                if (S.item) d.e = Object.assign({}, d.e, { hat: S.item });                                                   // wear an item that was never given
-                if (S.name) d.n = S.name;                                                                                    // fake / staff-looking name
-                if (S.oob) { d.x = -4000; d.y = -4000; }                                                                     // outside the map
-                return d;
-            };
-
-            WebSocket.prototype.send = function (data) {
-                if (!seen.has(this)) {
-                    seen.add(this); sock = this;
-                    this.addEventListener("message", e => {
-                        let d; try { d = JSON.parse(e.data); } catch (x) { return; }
-                        if (d.t === "hi") { myId = d.id; log("joined as " + d.id + (d.r ? " (role: " + d.r + " - STAFF IS EXEMPT FROM MOST CHECKS)" : "")); }
-                        else if (d.t === "p") players = d.ps || [];
-                        else if (d.t === "ev" && (d.k === "kicked" || d.k === "banned" || d.k === "muted" || d.k === "note" || d.k === "denied")) log("SERVER REACTION: " + d.k + (d.txt ? " - " + d.txt : ""));
-                    });
-                    this.addEventListener("close", () => log("socket closed by server/client"));
-                }
-                sock = this;
-                if (typeof data === "string" && data.charCodeAt(0) === 123) {
-                    try {
-                        const m = JSON.parse(data);
-                        if (m.t === "s" && m.d) {
-                            mod(m.d); const out = JSON.stringify(m); sent++;
-                            for (let i = 1; i < S.flood; i++) send0.call(this, out);
-                            return send0.call(this, out);
-                        }
-                    } catch (e) { }
-                }
-                return send0.call(this, data);
-            };
-
-            setInterval(() => { if (S.spam && sock && sock.readyState === 1) send0.call(sock, JSON.stringify({ t: "chat", txt: "buy cheap coins at example dot com " + (Math.random() * 999 | 0) })); }, 120);
-
-            const build = () => {
-            /* ---------- the menu ---------- */
-            const css = document.createElement("style");
-            css.textContent = `#tmm{position:fixed;top:60px;right:20px;width:270px;z-index:2147483647;background:#0b0d12f2;color:#d7ffe9;font:12px/1.4 Consolas,monospace;border:1px solid #00ff9c;border-radius:6px;box-shadow:0 0 18px #00ff9c55;user-select:none}
-        #tmm *{box-sizing:border-box}#tmm .h{padding:7px 10px;background:linear-gradient(90deg,#00ff9c33,#ff00aa33);cursor:move;font-weight:700;letter-spacing:1px;display:flex;justify-content:space-between}
-        #tmm .b{padding:8px 10px;max-height:72vh;overflow:auto}#tmm .r{display:flex;justify-content:space-between;align-items:center;margin:4px 0;gap:6px}
-        #tmm .s{color:#00ff9c;font-weight:700;margin:8px 0 2px;border-bottom:1px solid #00ff9c44}#tmm input[type=range]{width:110px}#tmm input[type=text]{width:130px;background:#000;color:#0f9;border:1px solid #0f9;padding:2px}
-        #tmm button{background:#000;color:#0f9;border:1px solid #0f9;cursor:pointer;padding:1px 8px;font:inherit}#tmm pre{margin:4px 0 0;max-height:110px;overflow:auto;color:#ffd84d;white-space:pre-wrap;font-size:11px}#tmm canvas{background:#000;border:1px solid #0f944;display:block;margin:4px auto}`;
-            document.head.appendChild(css);
-            box = document.createElement("div"); box.id = "tmm";
-            box.innerHTML = `<div class="h"><span>▚ TEST MOD MENU v1</span><span id="tmm-x" style="cursor:pointer">[hide: Insert]</span></div><div class="b" id="tmm-b"></div>`;
-            document.body.appendChild(box);
-            const B = box.querySelector("#tmm-b");
-            const row = (label, ctl) => { const r = document.createElement("div"); r.className = "r"; const s = document.createElement("span"); s.textContent = label; r.append(s, ctl); B.appendChild(r); };
-            const sec = t => { const d = document.createElement("div"); d.className = "s"; d.textContent = t; B.appendChild(d); };
-            const tog = (label, key, note) => { const c = document.createElement("input"); c.type = "checkbox"; c.onchange = () => { S[key] = c.checked ? 1 : 0; log(label + (c.checked ? " ON" : " OFF") + (note ? "  [tests: " + note + "]" : "")); }; row(label, c); };
-            const rng = (label, key, min, max, step, note) => { const c = document.createElement("input"); c.type = "range"; c.min = min; c.max = max; c.step = step; c.value = S[key]; c.oninput = () => { S[key] = +c.value; }; c.onchange = () => log(label + " = " + S[key] + (note ? "  [tests: " + note + "]" : "")); row(label, c); };
-            const txt = (label, key, ph, note) => { const c = document.createElement("input"); c.type = "text"; c.placeholder = ph; c.onchange = () => { S[key] = c.value.trim(); log(label + " = " + (S[key] || "off") + "  [tests: " + note + "]"); }; row(label, c); };
-
-            sec("TAGGING");
-            tog("Tag aura (when IT)", "tag", "teleport");
-            tog("Anti-tag evade", "evade", "teleport");
-            sec("MOVEMENT");
-            rng("Speed hack x", "speed", 1, 6, 0.5, "speed");
-            tog("Fake velocity", "vel", "velocity");
-            tog("Out of map", "oob", "bounds");
-            const rs = document.createElement("button"); rs.textContent = "reset offset"; rs.onclick = () => { off.x = off.y = 0; log("position offset reset"); }; row("Undo speed drift", rs);
-            sec("BODY / COSMETICS");
-            tog("Giant reach arms", "reach", "hands");
-            rng("Size", "size", 0.3, 4, 0.1, "selfmod / privesc");
-            txt("Wear item", "item", "st_ocrown", "staffitem / unowned");
-            txt("Fake name", "name", "[MOD] Monke", "impersonate");
-            sec("NETWORK");
-            rng("Update flood x", "flood", 1, 6, 1, "flood (6 may trigger packet flood)");
-            tog("Chat spam", "spam", "chat spam");
-            sec("RADAR (ESP)");
-            const cv = document.createElement("canvas"); cv.width = 240; cv.height = 150; B.appendChild(cv); const cx = cv.getContext("2d");
-            sec("LOG");
-            L = document.createElement("pre"); B.appendChild(L); log("menu ready - hook " + (sock ? "attached" : "waiting for game traffic"));
-
-            setInterval(() => {                                                    // radar: purely client side, nothing for the server to detect
-                cx.clearRect(0, 0, 240, 150); const m = me(); if (!m) return; cx.fillStyle = "#0f9"; cx.fillRect(118, 73, 5, 5);
-                for (const p of players) if (p.id !== myId) { cx.fillStyle = p.it ? "#f05" : "#ff0"; cx.fillRect(120 + (p.x - m.x) / 12, 75 + (p.y - m.y) / 12, 4, 4); }
-            }, 100);
-
-            const hd = box.querySelector(".h"); let dx = 0, dy = 0, dr = 0;        // drag
-            hd.onmousedown = e => { dr = 1; dx = e.clientX - box.offsetLeft; dy = e.clientY - box.offsetTop; };
-            addEventListener("mouseup", () => dr = 0); addEventListener("mousemove", e => { if (dr) { box.style.left = e.clientX - dx + "px"; box.style.top = e.clientY - dy + "px"; box.style.right = "auto"; } });
-            box.querySelector("#tmm-x").onclick = toggle; addEventListener("keydown", e => { if (e.key === "Insert") toggle(); });
-            };
-            const toggle = () => { shown = !shown; if (box) box.style.display = shown ? "" : "none"; };
-            if (document.body) build(); else addEventListener("DOMContentLoaded", build);
-            window.__tmm = { toggle, S };
-        })();
-    </script>
     <script>
         const $ = id => document.getElementById(id);
         let KEY = ""; try { KEY = sessionStorage.getItem("gk") || "" } catch (e) { }
@@ -600,19 +457,8 @@
         $("go").onclick = signIn; $("key").onkeydown = e => { if (e.key === "Enter") signIn() }; $("out").onclick = signOut;
         document.querySelectorAll("nav button").forEach(b => b.onclick = () => {
             document.querySelectorAll("nav button").forEach(x => x.classList.toggle("on", x === b));
-            ["over", "players", "tools", "testmm"].forEach(t => $("t-" + t).hidden = t !== b.dataset.tab); if (b.dataset.tab === "players") loadPlayers();
+            ["over", "players", "tools"].forEach(t => $("t-" + t).hidden = t !== b.dataset.tab); if (b.dataset.tab === "players") loadPlayers();
         });
-
-
-        /* test mod menu: copy / download / bookmarklet */
-        const tmmSrc = () => $("tmm-src").textContent.trim();
-        const tmmCopy = async (t, m) => { try { await navigator.clipboard.writeText(t); toast(m) } catch (e) { toast("Copy blocked by the browser - use Download instead") } };
-        $("tmmc").onclick = () => tmmCopy(tmmSrc(), "Script copied");
-        $("tmmb").onclick = () => tmmCopy("javascript:" + encodeURIComponent(tmmSrc()), "Bookmarklet copied - make a bookmark and paste this as its URL");
-        $("tmmd").onclick = () => {
-            const u = "// ==UserScript==\n// @name goril test mod menu\n// @match *://*/*\n// @run-at document-start\n// @grant none\n// ==/UserScript==\n" + tmmSrc();
-            const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([u], { type: "text/javascript" })); a.download = "goril-test-mod-menu.user.js"; a.click(); toast("Downloaded");
-        };
 
         function spark(h) {
             const svg = $("spark"), now = Date.now(), from = now - 86400000, pts = h.filter(x => x[0] >= from);
@@ -620,9 +466,9 @@
             const max = Math.max(3, ...pts.map(p => p[1])), X = t => 30 + (t - from) / 86400000 * 560, Y = v => 120 - v / max * 100;
             const d = pts.map((p, i) => (i ? "L" : "M") + X(p[0]).toFixed(1) + " " + Y(p[1]).toFixed(1)).join(" ");
             svg.innerHTML = `<line x1="30" y1="120" x2="590" y2="120" stroke="#2c313b"/><line x1="30" y1="20" x2="590" y2="20" stroke="#2c313b" stroke-dasharray="3 4"/>
-                <text x="24" y="24" fill="#8b93a3" font-size="11" text-anchor="end">${max}</text><text x="24" y="124" fill="#8b93a3" font-size="11" text-anchor="end">0</text>
-                <text x="30" y="136" fill="#8b93a3" font-size="11">24h ago</text><text x="590" y="136" fill="#8b93a3" font-size="11" text-anchor="end">now</text>
-                <path d="${d} L${X(pts[pts.length - 1][0])} 120 L${X(pts[0][0])} 120Z" fill="#e8761a22"/><path d="${d}" fill="none" stroke="#e8761a" stroke-width="2"/>`;
+                    <text x="24" y="24" fill="#8b93a3" font-size="11" text-anchor="end">${max}</text><text x="24" y="124" fill="#8b93a3" font-size="11" text-anchor="end">0</text>
+                    <text x="30" y="136" fill="#8b93a3" font-size="11">24h ago</text><text x="590" y="136" fill="#8b93a3" font-size="11" text-anchor="end">now</text>
+                    <path d="${d} L${X(pts[pts.length - 1][0])} 120 L${X(pts[0][0])} 120Z" fill="#e8761a22"/><path d="${d}" fill="none" stroke="#e8761a" stroke-width="2"/>`;
         }
         const EVT = { new: "👋 new player", created: "💾 profile created", login: "🔑 login", buy: "🛒 bought", give: "🎁 item given", revoke: "↩ item taken", coins: "🪙 coins set", role: "⭐ role", ban: "⛔ banned", unban: "✅ unbanned", kick: "👢 kicked", link: "🔗 account linked", clamp: "⚠ coins corrected", announce: "📢 announcement", reportfail: "❌ report NOT delivered", adminlink: "🔑 dashboard opened", delete: "🗑 deleted" };
 
@@ -656,23 +502,23 @@
             const r = await api("players", { q: ref.slice(0, 10) }); const p = r.players.find(x => x.ref === ref); if (!p) return toast("Player not found");
             const have = new Set(p.own), gr = new Set(p.granted), eq = new Set(Object.values(p.eq));
             $("mbody").innerHTML = `
-                <div class="row2"><h3 style="flex:1">${esc(p.n)} ${p.online ? '<span class="tag on">online · ' + esc(p.room) + "</span>" : ""} ${p.role ? `<span class="tag ${p.role}">${p.role}</span>` : ""} ${p.banned ? '<span class="tag ban">banned</span>' : ""}</h3><button id="mx">Close</button></div>
-                <div class="hint">ID ref <code>${p.id}</code> · the raw player ID is never stored on the server</div>
-                <div class="kv"><div>Coins</div><div>${p.coins.toLocaleString()} &nbsp; 🍬 ${p.candy}</div><div>First seen</div><div>${new Date(p.first).toLocaleString()}</div><div>Last seen</div><div>${new Date(p.last).toLocaleString()} (${ago(p.last)})</div><div>Logins / playtime</div><div>${p.logins} / ${dur(p.secs)}</div><div>Server corrections</div><div>${p.flags || 0}</div></div>
-                <h2>Cosmetics <span class="hint" style="text-transform:none">(click to give / take back · green = bought, gold = given by you)</span></h2>
-                <div class="chips">${CAT.map(i => `<span class="chip ${gr.has(i.id) ? "gr" : have.has(i.id) ? "have" : ""} ${eq.has(i.id) ? "eq" : ""}" data-item="${i.id}" data-g="${gr.has(i.id) ? 1 : 0}" title="${i.lk ? i.lk + " candy" : i.p + " coins"}">${i.id}</span>`).join("")}</div>
-                <h2>Coins</h2>
-                <div class="row2"><input id="cv" type="number" min="0" value="${p.coins}" style="width:130px"><button id="cset">Set coins</button><button id="cadd">Add</button><span class="hint">candy</span><input id="cdy" type="number" min="0" value="${p.candy}" style="width:90px"></div>
-                <h2>Staff &amp; moderation</h2>
-                <div class="row2">
-                  <select id="rl"><option value="">No role</option><option value="mod">Moderator</option><option value="owner">Owner</option></select><button id="rset">Set role</button>
-                  <button id="kick">Kick</button><button id="ban" class="${p.banned ? "" : "danger"}">${p.banned ? "Unban" : "Ban"}</button><button id="ren">Rename</button>
-                </div>
-                ${p.cfg ? '<div class="hint">This role is hard-coded in server.js / env vars, so it cannot be changed here.</div>' : ""}
-                <h2>Link old profile → this profile</h2>
-                <div class="hint">Use this when this player got a new ID after an update. Opens a picker of other profiles; the one you choose is merged INTO <b>${esc(p.n)}</b> (coins, cosmetics, role, bans, playtime), then removed.</div>
-                <div class="row2"><input id="lq" placeholder="search the OLD profile by name / ID" style="flex:1"><button id="lfind">Search</button></div><div id="lres"></div>
-                <div class="row2" style="margin-top:14px"><button class="danger sm" id="del">Delete this profile</button></div>`;
+                    <div class="row2"><h3 style="flex:1">${esc(p.n)} ${p.online ? '<span class="tag on">online · ' + esc(p.room) + "</span>" : ""} ${p.role ? `<span class="tag ${p.role}">${p.role}</span>` : ""} ${p.banned ? '<span class="tag ban">banned</span>' : ""}</h3><button id="mx">Close</button></div>
+                    <div class="hint">ID ref <code>${p.id}</code> · the raw player ID is never stored on the server</div>
+                    <div class="kv"><div>Coins</div><div>${p.coins.toLocaleString()} &nbsp; 🍬 ${p.candy}</div><div>First seen</div><div>${new Date(p.first).toLocaleString()}</div><div>Last seen</div><div>${new Date(p.last).toLocaleString()} (${ago(p.last)})</div><div>Logins / playtime</div><div>${p.logins} / ${dur(p.secs)}</div><div>Server corrections</div><div>${p.flags || 0}</div></div>
+                    <h2>Cosmetics <span class="hint" style="text-transform:none">(click to give / take back · green = bought, gold = given by you)</span></h2>
+                    <div class="chips">${CAT.map(i => `<span class="chip ${gr.has(i.id) ? "gr" : have.has(i.id) ? "have" : ""} ${eq.has(i.id) ? "eq" : ""}" data-item="${i.id}" data-g="${gr.has(i.id) ? 1 : 0}" title="${i.lk ? i.lk + " candy" : i.p + " coins"}">${i.id}</span>`).join("")}</div>
+                    <h2>Coins</h2>
+                    <div class="row2"><input id="cv" type="number" min="0" value="${p.coins}" style="width:130px"><button id="cset">Set coins</button><button id="cadd">Add</button><span class="hint">candy</span><input id="cdy" type="number" min="0" value="${p.candy}" style="width:90px"></div>
+                    <h2>Staff &amp; moderation</h2>
+                    <div class="row2">
+                      <select id="rl"><option value="">No role</option><option value="mod">Moderator</option><option value="owner">Owner</option></select><button id="rset">Set role</button>
+                      <button id="kick">Kick</button><button id="ban" class="${p.banned ? "" : "danger"}">${p.banned ? "Unban" : "Ban"}</button><button id="ren">Rename</button>
+                    </div>
+                    ${p.cfg ? '<div class="hint">This role is hard-coded in server.js / env vars, so it cannot be changed here.</div>' : ""}
+                    <h2>Link old profile → this profile</h2>
+                    <div class="hint">Use this when this player got a new ID after an update. Opens a picker of other profiles; the one you choose is merged INTO <b>${esc(p.n)}</b> (coins, cosmetics, role, bans, playtime), then removed.</div>
+                    <div class="row2"><input id="lq" placeholder="search the OLD profile by name / ID" style="flex:1"><button id="lfind">Search</button></div><div id="lres"></div>
+                    <div class="row2" style="margin-top:14px"><button class="danger sm" id="del">Delete this profile</button></div>`;
             $("modal").hidden = false;
             $("mx").onclick = closeM;
             document.querySelectorAll(".chip").forEach(c => c.onclick = async () => { await act(c.dataset.g === "1" ? "revoke" : "give", { ref, item: c.dataset.item }, c.dataset.g === "1" ? "Taken back" : "Given"); openPlayer(ref) });
