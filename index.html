@@ -485,6 +485,65 @@
             display: none !important
         }
     </style>
+    <script>
+        /* goril client guard: blocks dev-tool shortcuts, detects open developer tools, detects tampering with the network layer, and sends a heartbeat.
+           This is a deterrent only: the real enforcement is GorilAgent on the server (a browser can always be modified by its owner). */
+        (() => {
+            "use strict";
+            const W = window, NS = Function.prototype.toString, JS = JSON.stringify;
+            const ts = f => { try { return NS.call(f); } catch (e) { return ""; } }, nat = f => /\{\s*\[native code\]\s*\}\s*$/.test(ts(f));
+            const WSC = W.WebSocket, SEND0 = WSC && WSC.prototype.send;
+            if (!WSC || !SEND0) return;
+            const STK = /\bVM\d+\b|<anonymous>:\d|debugger eval code|\beval code\b|\beval at\b|snippet:\/\/|(?:chrome|moz|safari-web)-extension:\/\//;
+            let dead = 0, sock = null;
+            const out = o => { try { const s = sock || (typeof WS !== "undefined" ? WS : null); if (s && s.readyState === 1) SEND0.call(s, JS(o)); } catch (e) { } };
+            const rep = (k, w) => out({ t: "ac", k, w: String(w).slice(0, 100) });
+            const wall = why => {
+                if (dead) return; dead = 1; rep("dev", why);
+                try { const d = document.createElement("div"); d.style.cssText = "position:fixed;inset:0;z-index:2147483647;background:#000;color:#fff;font:600 20px system-ui,sans-serif;display:flex;align-items:center;justify-content:center;text-align:center;padding:30px"; d.textContent = "Developer tools are not allowed in this game. Close them and reload the page."; (document.body || document.documentElement).appendChild(d); } catch (e) { }
+                try { setTimeout(() => { try { (typeof WS !== "undefined" && WS) && WS.close(); } catch (e) { } }, 300); } catch (e) { }
+            };
+            const tamper = why => { rep("tamper", why); };
+
+            // every packet the page sends goes through this wrapper; packets sent from the console / eval / injected scripts are reported
+            const wrap = function send(d) {
+                sock = this;
+                try { const st = new Error().stack || ""; if (STK.test(st)) tamper("packet sent from console/injected code"); } catch (e) { }
+                return SEND0.call(this, d);
+            };
+            try { Object.defineProperty(WSC.prototype, "send", { value: wrap, writable: true, configurable: true }); } catch (e) { }
+
+            // integrity: native functions replaced? WebSocket hooked? Function.toString spoofed?
+            const check = () => {
+                try {
+                    if (W.WebSocket !== WSC) return tamper("WebSocket constructor replaced");
+                    if (WSC.prototype.send !== wrap) return tamper("WebSocket.send replaced");
+                    if (Function.prototype.toString !== NS) return tamper("Function.toString replaced");
+                    if (JSON.stringify !== JS) return tamper("JSON.stringify replaced");
+                    if (!nat(NS) || !nat(JS) || !nat(SEND0)) return tamper("native function replaced");
+                } catch (e) { }
+            };
+            setInterval(check, 2000); check();
+
+            // developer tools: a `debugger` statement stalls only when the tools are open; a logged object's getter only runs when the console is open
+            const probe = new Image(); let hit = 0; Object.defineProperty(probe, "id", { get() { hit = 1; return ""; } });
+            setInterval(() => {
+                try {
+                    const a = performance.now(); (function () { }).constructor("debugger")(); if (performance.now() - a > 400) return wall("debugger stall");
+                    hit = 0; console.debug(probe); if (console.clear && hit) { console.clear(); return wall("console open"); }
+                } catch (e) { }
+            }, 1500);
+
+            // shortcuts and menus
+            addEventListener("contextmenu", e => { e.preventDefault(); }, true);
+            addEventListener("keydown", e => {
+                const k = String(e.key).toLowerCase(), c = e.ctrlKey || e.metaKey;
+                if (e.key === "F12" || (c && e.shiftKey && "ijcke".includes(k) && k.length === 1) || (c && k === "u") || (e.metaKey && e.altKey && "iju".includes(k) && k.length === 1)) { e.preventDefault(); e.stopPropagation(); }
+            }, true);
+
+            setInterval(() => out({ t: "ac", k: "hb" }), 5000);
+        })();
+    </script>
 </head>
 <body>
     <canvas id="c"></canvas>
@@ -1437,6 +1496,7 @@
             if (d.k == "announce") { say("Staff: " + String(d.txt).slice(0, 80)); snd(500, .3); return }
             if (d.k == "denied") { kd = 1; say("The staff room is staff only"); setTimeout(() => load("lobby"), 800); return }
             if (d.k == "kicked") { kd = 1; say("You were removed by staff"); return }
+            if (d.k == "guard") { kd = 1; say(String(d.txt || "Removed by the anti-cheat").slice(0, 80)); return }
             if (d.k == "banned") { kd = 1; S.online = 0; save(); say("You are banned from online play"); return }
             if (d.k == "infect") { if (d.id == myId) { snd(150, .2); say("You got infected!") } if (d.by == myId) { S.coins += 5; save(); snd(700, .2); say("Tagged " + d.n + "! +5 coins") } }
             else if (d.k == "start") say(d.pick == myId ? "YOU are IT! Tag everyone!" : "Infection started! RUN!");
