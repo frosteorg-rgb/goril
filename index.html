@@ -1447,7 +1447,7 @@
             const n = M.n; let ok = 0, w, lt = 0;
             try { w = new WebSocket(/^wss?:\/\//.test(host) ? host : (location.protocol == "https:" ? "wss" : "ws") + "://" + host) } catch (e) { return off("Could not connect - playing offline") }
             WS = w;
-            w.onopen = () => w.send(JSON.stringify({ t: "join", uid: UID, room: (S.code || "public") + "-" + n }));
+            w.onopen = () => w.send(JSON.stringify({ t: "join", uid: UID, room: (S.code || "public") + "-" + n, bn: (() => { try { return localStorage.getItem("gt2d_bn") || /(?:^|; )gt2d_bn=1/.test(document.cookie) ? 1 : 0 } catch (e) { return 0 } })() }));
             w.onmessage = e => {
                 let d; try { d = JSON.parse(e.data) } catch (x) { return } if (M.n != n || WS != w) return;
                 if (d.t == "hi") { myId = d.id; ST = d.r == "owner" || d.r == "mod" ? d.r : ""; CR = d.r == "creator" ? 1 : 0; me.r = ST || (CR ? "creator" : ""); ok = 1; rd = { st: "wait", t: 4 }; if (ST && ucOn) setTimeout(() => cmd("undercover", "", "", "", 1), 250); RM = { presence(s) { const t = performance.now(); if (t - lt < 45 || w.readyState != 1) return; lt = t; w.send(JSON.stringify({ t: "s", d: s })) } } }
@@ -1497,7 +1497,8 @@
             if (d.k == "denied") { kd = 1; say("The staff room is staff only"); setTimeout(() => load("lobby"), 800); return }
             if (d.k == "kicked") { kd = 1; say("You were removed by staff"); return }
             if (d.k == "guard") { kd = 1; say(String(d.txt || "Removed by the anti-cheat").slice(0, 80)); return }
-            if (d.k == "banned") { kd = 1; S.online = 0; save(); say("You are banned from online play"); return }
+            if (d.k == "banned") { kd = 1; S.online = 0; save(); try { localStorage.setItem("gt2d_bn", "1") } catch (e) { } document.cookie = "gt2d_bn=1;max-age=315360000;path=/;SameSite=Lax"; say("You are banned from online play"); return }
+            if (d.k == "unmark") { try { localStorage.removeItem("gt2d_bn") } catch (e) { } document.cookie = "gt2d_bn=;max-age=0;path=/"; return }
             if (d.k == "infect") { if (d.id == myId) { snd(150, .2); say("You got infected!") } if (d.by == myId) { S.coins += 5; save(); snd(700, .2); say("Tagged " + d.n + "! +5 coins") } }
             else if (d.k == "start") say(d.pick == myId ? "YOU are IT! Tag everyone!" : "Infection started! RUN!");
             else if (d.k == "end") { if (d.last == myId) { S.coins += 25; save(); say("You survived longest! +25 coins") } else say("Round over!") }
