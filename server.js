@@ -66,6 +66,8 @@ const WEBHOOK2_OK = /^https:\/\/(?:[a-z]+\.)?discord(?:app)?\.com\/api\/webhooks
 const WEBHOOK3 = (process.env.DISCORD_ANTICHEAT_WEBHOOK || cfg.DISCORD_ANTICHEAT_WEBHOOK || "").trim();
 const WEBHOOK3_OK = /^https:\/\/(?:[a-z]+\.)?discord(?:app)?\.com\/api\/webhooks\/\d+\/[\w-]+/i.test(WEBHOOK3);
 const AUTOKICK = !!process.env.GORILAGENT_AUTOKICK;
+const AUTOBAN = process.env.GORILAGENT_AUTOBAN !== "0";                              // ON by default. GORILAGENT_AUTOBAN=0 turns it off
+const AUTOBAN_SCORE = +process.env.GORILAGENT_AUTOBAN_SCORE || 40;                   // ban at this risk score (and 2+ different kinds of detection). Instant ban for client tampering. Staff and content creators are never auto-banned.
 
 const sha = s => crypto.createHash("sha256").update(s).digest("hex");
 const norm = v => String(v == null ? "" : v).toLowerCase().replace(/[^a-f0-9]/g, "");
@@ -379,6 +381,10 @@ const track = (pl, ws) => {
     if (c.px != null) {
         const gap = (n - c.pt) / 1000, dist = Math.hypot(s.x - c.px, s.y - c.py);
         if (!quiet && gap < 1.5 && dist > 1000 + 1700 * gap && n - c.tt > 2000) { c.tele++; c.tt = n; GA.flag(ws, "teleport", "moved " + Math.round(dist) + "px in " + gap.toFixed(2) + "s", pl); }
+        else if (ws.room.lobby && n - c.fx >= 4000 && gap < 1.5 && dist > 1000 + 1700 * gap) {   // lobby respawns are legit, but 3 big jumps within 10 s are not
+            c.lj = (c.lj || []).filter(t => n - t < 10000); c.lj.push(n);
+            if (c.lj.length >= 3 && n - c.tt > 5000) { c.tele++; c.tt = n; c.lj.length = 0; GA.flag(ws, "teleport", "3 large jumps within 10 s in the lobby (last: " + Math.round(dist) + "px)", pl); }
+        }
     }
     c.px = s.x; c.py = s.y; c.pt = n; GA.bounds(ws, pl);
     c.smp.push([n, s.x, s.y]); while (c.smp.length && n - c.smp[0][0] > 1000) c.smp.shift();
@@ -407,15 +413,64 @@ const doCheck = (ws, m) => {
     ws.send(JSON.stringify(Object.assign({ t: "ev", k: "check", id: tp.ws.id, n: dn(tp) }, checkOf(tp))));
 };
 
-// --- text chat: rate limited, links removed, muted players are dropped here (not just hidden on the client) ---
+// --- chat filter: blocks slurs and very bad words (hate speech, self-harm "advice", sexual violence). Normal swearing (the f-word, shit, damn, ...) stays allowed. ---
+// The rule lists are rot13 so this file does not contain the words in plain text. Tokens are checked one word at a time (so "Niger" or "snigger" are fine),
+// and the strongest rules are also checked with spaces/symbols removed to catch "n i g g e r" style tricks. Add your own rules in config.json: "CHAT_BLOCK": ["regex", ...]
+const CHAT = (() => {
+    const rot = s => s.replace(/[a-z]/gi, c => String.fromCharCode((c <= "Z" ? 90 : 122) >= (c = c.charCodeAt(0) + 13) ? c : c - 26));
+    const T = ["a+v+t{2,}(r+e+|n+u*|h+u+)[fm]*", "s+n+t{1,2}(b+g+|r+g+)?f*", "q+l+x+r+f*", "g+e+n+a+a+(l|vr)f*", "f+u+r+z+n+y+r+f*", "e+r+g+n+e+q+(rq|f|ngvba)?", "g+n+e+q+f*", "p+u+v+a+x+f*", "t+b+b+x+f*", "f+c+v+p+x?f*", "x+v+x+r+f*", "j+r+g+o+n+p+x+f*", "o+r+n+a+r+e+f*", "p+b+b+a+f*", "(gbjry|ent)u+r+n+q+f*", "c+n+x+v+f*", "p+h+a+g+f*", "j+u+b+e+r+f*", "f+y+h+g+f*", "e+n+c+(r+q?|r+f|v+a+t|v+f+g)f*", "c+n?r+q+b+f*", "c+n?r+q+b+c+u+v+y+r+f*", "x+l+f+", "w+v+t+n+o+b+b+f*", "p+u+v+a+t+p+u+b+a+t+f*"].map(x => new RegExp("^(?:" + rot(x) + ")$")), Q = ["(?<!f)a+v+t{2,}(r+e|n+)", "s+n+t{2}b+g", "e+r+g+n+e+q(?!nag)", "x+v+y+y+(l+b+h+e+|h+e+)f+r+y+s", "u+n+a+t+l+b+h+e+f+r+y+s"].map(x => new RegExp(rot(x)));
+    const X = Array.isArray(cfg.CHAT_BLOCK) ? cfg.CHAT_BLOCK.map(x => { try { return new RegExp(String(x), "i"); } catch (e) { return null; } }).filter(Boolean) : [];
+    const LEET = { "0": "o", "1": "i", "!": "i", "|": "i", "3": "e", "4": "a", "@": "a", "5": "s", "$": "s", "7": "t", "+": "t", "(": "c", "8": "b" };
+    const norm = s => String(s).normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[01!|3457@$+(8]/g, c => LEET[c]);
+    const bad = text => {
+        const n = norm(text); if (!n.trim()) return "";
+        for (const w of n.split(/[^a-z]+/)) if (w && T.some(r => r.test(w))) return "word";
+        for (const mm of n.matchAll(/(?:^|[^a-z])((?:[a-z][^a-z]{1,2}){2,}[a-z])(?=[^a-z]|$)/g)) { const j = mm[1].replace(/[^a-z]/g, ""); if (T.some(r => r.test(j))) return "spaced word"; }   // "c u n t", "k.y.s"
+        const sqz = n.replace(/[^a-z]/g, ""); if (Q.some(r => r.test(sqz))) return "spaced word";
+        if (X.some(r => r.test(n))) return "custom rule";
+        return "";
+    };
+    return { bad };
+})();
+const kickWs = (ws, txt) => { try { if (ws.readyState === 1) { ws.send(JSON.stringify({ t: "ev", k: "guard", txt })); ws.close(); } } catch (e) { } };
+
+// --- text chat: rate limited, links removed, filtered, and spammers are muted (60 s, then 5 min, then 10 min) and kicked if they keep going or reach the 3rd mute ---
+const cmute = new Map();   // player ID (or IP when there is none) -> chat penalties. Kept in memory, so rejoining does not escape a mute.
+setInterval(() => { const n = Date.now(); cmute.forEach((c, k) => { if (n - c.seen > 3600000 && n > c.until) cmute.delete(k); }); }, 600000);
 const chatMsg = (ws, m) => {
     const R = ws.room, pl = R.m.get(ws.id), n = Date.now(); if (!pl) return;
     if (ws.mu) return note(ws, "You are muted by staff.");
-    if (n - (ws.cl || 0) < 700) return;
-    ws.cb = (ws.cb || []).filter(t => n - t < 8000); if (ws.cb.length >= 6) { GA.flag(ws, "chat", "hit the chat rate limit (spam)"); return note(ws, "Slow down a little!"); }
+    const key = ws.uh || "ip:" + ws.ip; let c = cmute.get(key); if (!c) cmute.set(key, c = { until: 0, strikes: 0, tries: 0, spam: [], bw: [], seen: n, last: 0 }); c.seen = n;
+    const st = isStaff(ws);
+    if (!st && n < c.until) {   // already muted
+        c.tries++;
+        if (c.tries >= 8) { GA.flag(ws, "chatspam", "kept sending messages while chat-muted: kicked", pl); c.tries = 0; return kickWs(ws, "Removed for chat spam."); }
+        return note(ws, "You are chat-muted for " + Math.ceil((c.until - n) / 1000) + " more seconds.");
+    }
+    const spam = why => {   // 4 spam events in 30 s = a mute; 3rd mute within the hour = kick
+        if (st) return; c.spam = c.spam.filter(t => n - t < 30000); c.spam.push(n); if (c.spam.length < 4) return;
+        c.spam.length = 0; if (n - c.last > 3600000) c.strikes = 0; c.strikes++; c.last = n; c.tries = 0;
+        const secs = c.strikes === 1 ? 60 : c.strikes === 2 ? 300 : 600; c.until = n + secs * 1000;
+        GA.flag(ws, "chatspam", "spam (" + why + "): chat muted for " + secs + "s (mute #" + c.strikes + ")" + (c.strikes >= 3 ? " and kicked" : ""), pl);
+        if (c.strikes >= 3) return kickWs(ws, "Removed for chat spam.");
+        note(ws, "You were chat-muted for " + secs + " seconds for spamming.");
+    };
+    if (n - (ws.cl || 0) < 700) return void spam("typing too fast");
+    ws.cb = (ws.cb || []).filter(t => n - t < 8000); if (ws.cb.length >= 6) { GA.flag(ws, "chat", "hit the chat rate limit (spam)"); spam("rate limit"); return note(ws, "Slow down a little!"); }
     let t = str(m.txt, 160).replace(/[\u0000-\u001f\u007f\u200b-\u200f\u202a-\u202e\u2066-\u2069]/g, "").replace(/\s+/g, " ").trim().slice(0, 120);
     t = t.replace(/(https?:\/\/|www\.)\S+/gi, "[link]");
-    if (!t || (t === ws.lt && n - (ws.ltt || 0) < 10000)) return;
+    if (!t) return;
+    if (t === ws.lt && n - (ws.ltt || 0) < 10000) return void spam("repeated message");
+    const why = CHAT.bad(t);
+    if (why) {   // blocked: nobody else sees it
+        GA.flag(ws, "badword", "blocked message (" + why + "): " + clean(t, 100), pl);
+        if (!st) {
+            c.bw = c.bw.filter(x => n - x < 600000); c.bw.push(n);
+            if (c.bw.length >= 6) { c.bw.length = 0; return kickWs(ws, "Removed for using blocked words."); }
+            if (c.bw.length >= 3) { c.until = n + 600000; c.tries = 0; note(ws, "Blocked words again: chat muted for 10 minutes."); return; }
+        }
+        return note(ws, "That message was blocked (slurs and very bad words are not allowed).");
+    }
     ws.cl = n; ws.cb.push(n); ws.lt = t; ws.ltt = n;
     R.chat.push({ n: dn(pl), t, at: n }); if (R.chat.length > 25) R.chat.shift();
     bc(R, { t: "ev", k: "chat", id: ws.id, n: dn(pl), r: ws.uc ? "" : ws.role, txt: t });
@@ -482,68 +537,130 @@ const doReport = (ws, m) => {
    - Also watches: admin dashboard brute force, connection floods, moderators firing lots of staff actions (possible abuse).
    All alerts go to DISCORD_ANTICHEAT_WEBHOOK, are logged in the dashboard event feed, and ping online staff in game. */
 const GA = (() => {
-    const WT = { speed: 3, teleport: 5, hands: 4, velocity: 3, flood: 2, cosmetic: 6, unowned: 5, staffitem: 10, economy: 5, bounds: 4, chat: 1, report: 10, fakecmd: 10, privesc: 10, restore: 3, banevade: 10, msgflood: 3, impersonate: 4, selfmod: 10 };
-    const LBL = { speed: "Impossible speed", teleport: "Teleporting", hands: "Impossible arm positions", velocity: "Impossible velocity values", flood: "Update flooding", cosmetic: "Illegal cosmetic", unowned: "Wearing a cosmetic they don't own", staffitem: "Staff-only item", economy: "Coins/candy tampering", bounds: "Outside the map", chat: "Chat spam", report: "Mass reports", fakecmd: "Fake staff command", privesc: "Privilege escalation attempt", restore: "Account-restore brute force", banevade: "Ban evasion attempt", msgflood: "Packet flooding", impersonate: "Staff impersonation", selfmod: "Tampered character size" };
-    const IMM = new Set(["staffitem", "fakecmd", "privesc", "banevade", "selfmod", "report"]);
-    const rec = new Map(), recent = [], q = [], raws = new Map(), rp = new Map(), acts = new Map();
+    const WT = {
+        speed: 3, teleport: 5, hands: 4, velocity: 3, flood: 2, cosmetic: 6, unowned: 5, staffitem: 10, economy: 5, bounds: 4, chat: 1, report: 10, fakecmd: 10, privesc: 10, restore: 3, banevade: 10, msgflood: 3, impersonate: 4, selfmod: 10,
+        tamper: 40, devtools: 12, noguard: 6, badpacket: 2, badword: 3, chatspam: 4
+    };
+    const LBL = {
+        speed: "Impossible speed", teleport: "Teleporting", hands: "Impossible arm positions", velocity: "Impossible velocity values", flood: "Update flooding", cosmetic: "Illegal cosmetic", unowned: "Wearing a cosmetic they don't own", staffitem: "Staff-only item", economy: "Coins/candy tampering", bounds: "Outside the map", chat: "Chat rate limit", report: "Mass reports", fakecmd: "Fake staff command", privesc: "Privilege escalation attempt", restore: "Account-restore brute force", banevade: "Ban evasion attempt", msgflood: "Packet flooding", impersonate: "Staff impersonation", selfmod: "Tampered character size",
+        tamper: "Client tampering / script injection", devtools: "Developer tools opened", noguard: "Modified or non-browser client", badpacket: "Malformed / unknown packets", badword: "Blocked word in chat or name", chatspam: "Chat spam (muted)"
+    };
+    const IMM = new Set(["staffitem", "fakecmd", "privesc", "banevade", "selfmod", "report", "tamper", "devtools", "noguard"]);   // these alert Discord at once, whatever the score
+    const THR = { badword: 0, chatspam: 0, tamper: 0, devtools: 0, noguard: 0 };                                                   // kinds that are logged + sent to Discord EVERY time; the rest are collapsed per 10 s (repeat counts are included)
+    const rec = new Map(), recent = [], raws = new Map(), rp = new Map(), acts = new Map(), ipb = new Map();
     const BOUNDS = { lobby: [2600, 1500], city: [3400, 1700], forest: [3800, 1700], sky: [3400, 1800], staff: [2800, 1200] };
     const mask = ip => String(ip || "?").replace(/^(\d+\.\d+)\.\d+\.\d+$/, "$1.x.x");
-    const post = body => { if (!WEBHOOK3_OK || typeof fetch !== "function") return; if (q.length < 40) q.push(body); };
-    setInterval(() => {
-        const b = q.shift(); if (!b) return;
-        fetch(WEBHOOK3, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(b) })
-            .then(r => { if (!r.ok) console.log("[gorilagent] Discord answered " + r.status); })
-            .catch(e => console.log("[gorilagent] could not reach Discord: " + e.message));
-    }, 1500);
+
+    /* ---- Discord delivery: every message is queued, packed up to 10 embeds per request, retried on errors and on Discord rate limits (429). Nothing is silently dropped. ---- */
+    const q = []; let hold = 0, sending = 0, fails = 0, lost = 0, sentN = 0;
+    const post = body => {
+        if (!WEBHOOK3_OK || typeof fetch !== "function") return;
+        for (const e of body.embeds || []) q.push(e);
+        if (q.length > 3000) { lost += q.length - 3000; q.splice(0, q.length - 3000); }
+    };
+    setInterval(async () => {
+        if (sending || Date.now() < hold) return;
+        if (lost && q.length < 2000) { q.push({ title: "🛡 GorilAgent: backlog overflow", description: lost + " older detections were dropped because Discord could not keep up. Check the dashboard event feed / server console for them.", color: 0xe62117 }); lost = 0; }
+        if (!q.length) return;
+        const embeds = []; let size = 0;
+        for (const e of q) { const sz = JSON.stringify(e).length; if (embeds.length && (embeds.length >= 10 || size + sz > 5500)) break; embeds.push(e); size += sz; }
+        sending = 1;
+        try {
+            const r = await fetch(WEBHOOK3, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ username: "GorilAgent", allowed_mentions: { parse: [] }, embeds }) });
+            if (r.ok) { q.splice(0, embeds.length); fails = 0; sentN += embeds.length; }
+            else if (r.status === 429) { let ra = 2; try { ra = (await r.json()).retry_after || 2; } catch (e) { } hold = Date.now() + Math.ceil(ra * 1000) + 300; }
+            else if (r.status >= 500) { fails++; hold = Date.now() + Math.min(60000, 3000 * fails); console.log("[gorilagent] Discord answered " + r.status + " - will retry"); }
+            else { console.log("[gorilagent] Discord rejected a message (" + r.status + ") - skipped"); q.splice(0, embeds.length); }     // a bad request would block the queue forever
+        } catch (e) { fails++; hold = Date.now() + Math.min(60000, 3000 * fails); console.log("[gorilagent] could not reach Discord (will retry): " + e.message); }
+        sending = 0;
+    }, 1100);
+
     const staffPing = txt => { const m = JSON.stringify({ t: "ev", k: "note", txt: String(txt).slice(0, 80) }); for (const w of wss.clients) if (w.readyState === 1 && w.room && isStaff(w)) w.send(m); };
     const mine = ws => ws.room && ws.room.m.get(ws.id);
+
     const alert = (lvl, ws, r, pl) => {
         const hi = lvl === "high", n = Date.now(), ck = pl ? checkOf(pl) : null;
         const log = r.log.slice(-8).map(x => "[" + ((n - x.t) / 1000 | 0) + "s ago] " + x.kind + ": " + x.d).join("\n");
         post({
-            username: "GorilAgent", allowed_mentions: { parse: [] },
             embeds: [{
                 title: hi ? "🚨 GorilAgent: HIGH RISK player" : "🕵️ GorilAgent: suspicious activity", color: hi ? 0xe62117 : 0xe8761a, timestamp: new Date(n).toISOString(),
                 fields: [
                     { name: "Player", value: "**" + clean(r.name, 12) + "**" + (ws.role ? " (" + ws.role + ")" : "") + "\nref `" + r.ref + "`", inline: true },
                     { name: "Risk score", value: r.score.toFixed(1) + (hi ? " (high risk)" : ""), inline: true },
                     { name: "Room", value: "`" + clean(ws.rname || "-", 40) + "`", inline: true },
-                    { name: "What triggered it", value: Object.keys(r.k).map(k => (LBL[k] || k) + " x" + r.cnt[k]).join(", ").slice(0, 900) || "-" },
+                    { name: "What triggered it", value: Object.keys(r.cnt).map(k => (LBL[k] || k) + " x" + r.cnt[k]).join(", ").slice(0, 900) || "-" },
                     { name: "Recent detections", value: ("```\n" + clean(log, 850) + "\n```").slice(0, 1000) },
                     { name: "Movement check", value: ck ? ("**" + ck.v + "** - peak " + ck.maxv + " px/s over " + ck.secs + "s") : "n/a" },
-                    { name: "Suggested action", value: hi ? "Review now. Kick/ban from the staff menu if it checks out." : "Keep an eye on them; use Check in game." }
+                    { name: "Suggested action", value: hi ? (AUTOBAN ? "Auto-ban triggers at score " + AUTOBAN_SCORE + " (needs 2+ kinds of detection). Review now." : "Review now. Kick/ban from the staff menu if it checks out.") : "Keep an eye on them; use Check in game." }
                 ]
             }]
         });
         staffPing("🕵 GorilAgent: " + r.name + " flagged (" + (hi ? "HIGH RISK" : "suspicious") + ")");
         logEv("agent", ws.uh, r.name, (hi ? "HIGH " : "SUSP ") + r.score.toFixed(1));
         console.log("[gorilagent] " + (hi ? "HIGH RISK " : "suspicious ") + r.name + " score " + r.score.toFixed(1));
-        if (hi && AUTOKICK && !isStaff(ws) && !ws.role && ws.readyState === 1) { ws.send(JSON.stringify({ t: "ev", k: "kicked" })); ws.close(); }
+        if (hi && AUTOKICK && !AUTOBAN && !isStaff(ws) && !ws.role && ws.readyState === 1) { ws.send(JSON.stringify({ t: "ev", k: "kicked" })); ws.close(); }
     };
+
+    const autoban = (ws, r, why, pl) => {   // never staff / creators; permanent (by player ID), reversible from the dashboard (Players > Unban)
+        if (ws.role || ws.banned) return; ws.banned = 1;
+        const n = Date.now(), uh = ws.uh;
+        if (uh) { bans.add(uh); saveBans(); } else if (ws.ip) ipb.set(ws.ip, n + 86400000);   // no player ID = not a normal browser client: block that IP for 24 h
+        post({
+            embeds: [{
+                title: "⛔ GorilAgent: AUTO-BAN", color: 0xe62117, timestamp: new Date(n).toISOString(), fields: [
+                    { name: "Player", value: "**" + clean(r.name, 12) + "**\nref `" + r.ref + "`" + (uh ? "" : "\n(no player ID - IP blocked 24 h)"), inline: true },
+                    { name: "Risk score", value: r.score.toFixed(1), inline: true },
+                    { name: "Reason", value: clean(why, 300) },
+                    { name: "Detections", value: Object.keys(r.cnt).map(k => (LBL[k] || k) + " x" + r.cnt[k]).join(", ").slice(0, 900) || "-" },
+                    { name: "Undo", value: "Dashboard > Players > open the player > Unban" }]
+            }]
+        });
+        logEv("ban", uh, r.name, "GorilAgent auto-ban: " + why); staffPing("⛔ GorilAgent banned " + r.name);
+        console.log("[gorilagent] AUTO-BAN " + r.name + " (" + why + ")");
+        const L = uh ? socksOf(uh) : [ws]; if (!L.includes(ws)) L.push(ws);
+        L.forEach(w => { try { w.send(JSON.stringify({ t: "ev", k: "banned" })); w.close(); } catch (e) { } });
+    };
+
     const flag = (ws, kind, detail, pl) => {
         if (!ws) return; if (ws.role === "owner") return; if (isStaff(ws) && kind !== "privesc") return;
         const n = Date.now(), key = ws.uh || "id:" + ws.id, P = pl || mine(ws), name = P ? dn(P) : "(not in a room)";
-        let r = rec.get(key); if (!r) { r = { name, ref: ws.uh ? ws.uh.slice(0, 10) : "no-id", score: 0, t: n, k: {}, cnt: {}, log: [], alert: 0, hi: 0 }; rec.set(key, r); }
+        let r = rec.get(key); if (!r) { r = { name, ref: ws.uh ? ws.uh.slice(0, 10) : "no-id", score: 0, t: n, k: {}, cnt: {}, sup: {}, log: [], alert: 0, hi: 0 }; rec.set(key, r); }
         r.name = name; r.cnt[kind] = (r.cnt[kind] || 0) + 1;
-        if (n - (r.k[kind] || 0) < 20000) return;           // count repeats, but only score / log a kind every 20 s
-        r.k[kind] = n; r.score = r.score * Math.pow(0.5, (n - r.t) / 600000) + (WT[kind] || 2); r.t = n;
-        r.log.push({ t: n, kind: LBL[kind] || kind, d: String(detail).slice(0, 140) }); if (r.log.length > 20) r.log.shift();
-        recent.push({ t: n, name, ref: r.ref, kind, detail: String(detail).slice(0, 140), score: +r.score.toFixed(1) }); while (recent.length > 300) recent.shift();
-        console.log("[gorilagent] " + name + " " + kind + ": " + detail);
+        const thr = kind in THR ? THR[kind] : 10000;
+        if (thr && n - (r.k[kind] || 0) < thr) { r.sup[kind] = (r.sup[kind] || 0) + 1; return; }   // repeats inside the window are counted and added to the next report
+        const rep = r.sup[kind] || 0; r.sup[kind] = 0; r.k[kind] = n;
+        r.score = r.score * Math.pow(0.5, (n - r.t) / 600000) + (WT[kind] || 2); r.t = n;
+        const dd = String(detail).slice(0, 140) + (rep ? " (+" + rep + " repeats)" : "");
+        r.log.push({ t: n, kind: LBL[kind] || kind, d: dd }); if (r.log.length > 20) r.log.shift();
+        recent.push({ t: n, name, ref: r.ref, kind, detail: dd, score: +r.score.toFixed(1) }); while (recent.length > 400) recent.shift();
+        console.log("[gorilagent] " + name + " " + kind + ": " + dd);
+        post({
+            embeds: [{
+                title: "🔎 " + (LBL[kind] || kind), color: IMM.has(kind) ? 0xe62117 : 0xe8761a, timestamp: new Date(n).toISOString(),
+                description: ("**" + clean(name, 12) + "** (ref `" + r.ref + "`) in `" + clean(ws.rname || "-", 40) + "`\n" + clean(dd, 300)).slice(0, 1500),
+                footer: { text: "risk " + r.score.toFixed(1) + " - total " + (r.cnt[kind]) + "x this kind" }
+            }]
+        });
+        const kinds = Object.keys(r.cnt).length;
+        if (AUTOBAN && !ws.role && (kind === "tamper" || (r.score >= AUTOBAN_SCORE && kinds >= 2))) return autoban(ws, r, kind === "tamper" ? "client tampering: " + detail : "risk score " + r.score.toFixed(1) + " (" + kinds + " kinds of detection)", P);
         if (r.score >= 22 && n - r.hi > 600000) { r.hi = n; r.alert = n; alert("high", ws, r, P); }
         else if ((IMM.has(kind) || r.score >= 10) && n - r.alert > 300000) { r.alert = n; alert("sus", ws, r, P); }
     };
-    const raw = (title, desc, color) => {
-        const n = Date.now(); if (n - (raws.get(title) || 0) < 300000) return; raws.set(title, n);
-        post({ username: "GorilAgent", allowed_mentions: { parse: [] }, embeds: [{ title: "🛡 GorilAgent: " + title, description: String(desc).slice(0, 1500), color: color || 0xe8761a, timestamp: new Date(n).toISOString() }] });
+
+    const raw = (title, desc, color) => {   // server-wide alerts (not tied to a player). Same title is collapsed for 60 s and the count is added to the next one
+        const n = Date.now(), o = raws.get(title) || { t: 0, c: 0 };
+        if (n - o.t < 60000) { o.c++; raws.set(title, o); return; }
+        const extra = o.c ? "\n(+" + o.c + " more since the last alert)" : ""; raws.set(title, { t: n, c: 0 });
+        post({ embeds: [{ title: "🛡 GorilAgent: " + title, description: (String(desc) + extra).slice(0, 1500), color: color || 0xe8761a, timestamp: new Date(n).toISOString() }] });
         logEv("agent", "", "", title); console.log("[gorilagent] " + title + ": " + desc);
     };
-    const reported = (tp, ws, why) => {   // many DIFFERENT players reporting the same person within 15 minutes
+
+    const reported = (tp, ws, why) => {
         const n = Date.now(), key = tp.ws.uh || "id:" + tp.ws.id, by = ws.uh || "id:" + ws.id;
         const L = (rp.get(key) || []).filter(x => n - x.t < 900000 && x.by !== by); L.push({ by, t: n, why: REASONS[why] ? why : "other" }); rp.set(key, L);
         if (L.length >= 3) { const w2 = {}; L.forEach(x => w2[x.why] = (w2[x.why] || 0) + 1); flag(tp.ws, "report", L.length + " different players reported them in 15 min (" + Object.keys(w2).map(k => REASONS[k] + " x" + w2[k]).join(", ") + ")", tp); }
     };
-    const checkOutfit = (ws, pl) => {   // wearing a priced cosmetic the saved profile says they never bought / were given (20 s grace for save lag)
+    const checkOutfit = (ws, pl) => {
         if (!ws.uh || isStaff(ws)) return; const pr = profiles[ws.uh]; if (!pr || pr.stub) return;
         const n = Date.now(), g = new Set(gl(ws.uh)); pl.ow = pl.ow || {};
         for (const slot in pl.s.e) {
@@ -553,7 +670,9 @@ const GA = (() => {
         }
     };
     const checkName = (ws, pl) => {
-        if (pl.chk === pl.rn || isStaff(ws)) return; pl.chk = pl.rn;
+        if (isStaff(ws)) return; const rawn = pl.rn;
+        if (pl.chk === rawn) { if (pl.bn) pl.rn = "Monke"; return; } pl.chk = rawn; pl.bn = 0;
+        if (CHAT.bad(rawn)) { pl.bn = 1; flag(ws, "badword", "player name \"" + clean(rawn, 12) + "\" contains a blocked word (shown as Monke)", pl); pl.rn = "Monke"; return; }
         if (/\b(owner|admin|staff|moderator)\b|\[(mod|owner|staff)\]/i.test(pl.rn)) return flag(ws, "impersonate", "name \"" + pl.rn + "\" looks like a staff tag", pl);
         for (const o of ws.room.m.values()) if (o !== pl && isStaff(o.ws) && !o.ws.uc && o.rn.toLowerCase() === pl.rn.toLowerCase()) return flag(ws, "impersonate", "copied the name of staff member " + o.rn, pl);
     };
@@ -565,10 +684,27 @@ const GA = (() => {
         const n = Date.now(), L = (acts.get(ws.id) || []).filter(t => n - t < 120000); L.push(n); acts.set(ws.id, L);
         if (L.length >= 15) raw("Possible staff abuse", "Moderator **" + clean(dn(me), 12) + "** (ref " + (ws.uh ? ws.uh.slice(0, 10) : "?") + ") used " + L.length + " staff actions in 2 minutes (latest: " + k + ").", 0xe62117);
     };
+
+    /* ---- reports from the browser-side guard in index.html (tamper checks, developer tools, heartbeat) ---- */
+    const client = (ws, m) => {
+        const n = Date.now(); ws.acn = (ws.acn || []).filter(t => n - t < 10000); if (ws.acn.length >= 20) return; ws.acn.push(n);
+        if (m.k === "hb") { ws.hb = n; return; }
+        const what = clean(str(m.w, 100), 100), pl = mine(ws);
+        if (m.k === "tamper") flag(ws, "tamper", what || "integrity check failed", pl);
+        else if (m.k === "dev") { flag(ws, "devtools", what || "developer tools open", pl); if (!isStaff(ws)) kickWs(ws, "Developer tools are not allowed in this game."); }
+    };
+    setInterval(() => {   // a normal browser client sends a heartbeat every 5 s; bots and modified clients that drop the guard do not
+        const n = Date.now();
+        for (const w of wss.clients) {
+            if (w.readyState !== 1 || !w.room || w.ngf || isStaff(w) || !w.gj || n - w.gj < 45000) continue;
+            if (!w.hb || n - w.hb > 40000) { w.ngf = 1; flag(w, "noguard", w.hb ? "stopped sending client integrity heartbeats" : "never sent client integrity heartbeats (old cached page, modified or non-browser client)"); }
+        }
+    }, 10000);
+
     const risk = () => [...rec.values()].map(r => ({ name: r.name, ref: r.ref, score: +(r.score * Math.pow(0.5, (Date.now() - r.t) / 600000)).toFixed(1), kinds: r.cnt })).filter(r => r.score >= 1).sort((a, b) => b.score - a.score).slice(0, 25);
-    setInterval(() => { const n = Date.now(); rec.forEach((r, k) => { if (n - r.t > 7200000) rec.delete(k); }); rp.forEach((L, k) => { if (!L.some(x => n - x.t < 900000)) rp.delete(k); }); acts.forEach((L, k) => { if (!L.some(t => n - t < 120000)) acts.delete(k); }); }, 600000);
-    console.log("GorilAgent anti-cheat: active" + (WEBHOOK3_OK ? " (Discord alerts on)" : " (NO valid DISCORD_ANTICHEAT_WEBHOOK - alerts go to the console / dashboard only)") + (AUTOKICK ? ", auto-kick ON" : ""));
-    return { flag, raw, mask, reported, checkOutfit, checkName, bounds, staffAct, risk, recent };
+    setInterval(() => { const n = Date.now(); rec.forEach((r, k) => { if (n - r.t > 7200000) rec.delete(k); }); rp.forEach((L, k) => { if (!L.some(x => n - x.t < 900000)) rp.delete(k); }); acts.forEach((L, k) => { if (!L.some(t => n - t < 120000)) acts.delete(k); }); ipb.forEach((t, k) => { if (t < n) ipb.delete(k); }); raws.forEach((o, k) => { if (n - o.t > 3600000) raws.delete(k); }); }, 600000);
+    console.log("GorilAgent anti-cheat: active" + (WEBHOOK3_OK ? " (Discord alerts on - every detection is sent)" : " (NO valid DISCORD_ANTICHEAT_WEBHOOK - alerts go to the console / dashboard only)") + (AUTOBAN ? ", auto-ban ON at score " + AUTOBAN_SCORE : ", auto-ban OFF") + (AUTOKICK && !AUTOBAN ? ", auto-kick ON" : ""));
+    return { flag, raw, mask, reported, checkOutfit, checkName, bounds, staffAct, risk, recent, client, ipBanned: ip => (ipb.get(ip) || 0) > Date.now() };
 })();
 
 // --- "Call a mod": notifies every mod/owner online (any room) and posts to the call-a-mod Discord webhook ---
@@ -634,12 +770,13 @@ setInterval(sendOps, 3000);
 wss.on("connection", (ws, req) => {
     const ip = (TRUST_PROXY && String(req.headers["x-forwarded-for"] || "").split(",")[0].trim()) || req.socket.remoteAddress || "?";
     if ((ips.get(ip) || 0) >= MAX_PER_IP) { GA.raw("Connection flood", "More than " + MAX_PER_IP + " simultaneous connections from " + GA.mask(ip), 0xe8761a); return ws.close(); }
+    if (GA.ipBanned(ip)) return ws.close();
     ips.set(ip, (ips.get(ip) || 0) + 1);
-    ws.mw = Date.now(); ws.mn = 0;
+    ws.ip = ip; ws.mw = Date.now(); ws.mn = 0;
     ws.id = "p" + nid++; ws.room = null; ws.role = ""; ws.uh = null; ws.lc = 0; ws.uc = 0; ws.ucn = "";
     ws.on("message", raw => {
         const tn = Date.now(); if (tn - ws.mw >= 1000) { ws.mw = tn; ws.mn = 0; } if (++ws.mn > 120) { GA.flag(ws, "msgflood", "sent over 120 packets in one second"); return ws.close(); }   // flood protection (real traffic is ~25 msgs/sec)
-        let m; try { m = JSON.parse(raw); } catch (e) { return; } if (!m || typeof m !== "object") return;
+        let m; try { m = JSON.parse(raw); } catch (e) { GA.flag(ws, "badpacket", "sent data that is not valid JSON"); return; } if (!m || typeof m !== "object") { GA.flag(ws, "badpacket", "sent a packet that is not an object"); return; }
         if (m.t === "join" && !ws.room) {
             // the role comes ONLY from the server's own list, matched against the player's permanent ID
             const uid = norm(m.uid); ws.uh = uid.length === 32 ? sha(uid) : null;
@@ -652,7 +789,7 @@ wss.on("connection", (ws, req) => {
             let R = rooms.get(name);
             if (!R) { if (rooms.size >= MAX_ROOMS) return ws.close(); R = { m: new Map(), st: "wait", t: 3, last: null, chat: [], lobby: /-(lobby|staff|shop)$/.test(name) }; rooms.set(name, R); }
             if (R.m.size >= 16) return ws.close();
-            ws.room = R; ws.rname = name;
+            ws.room = R; ws.rname = name; ws.gj = Date.now();
             R.m.set(ws.id, { ws, cs: newCS(), last: Date.now(), rn: "Monke", s: { x: 0, y: 0, vx: 0, vy: 0, f: 1, h: [14, 16, -14, 16], hu: 30, n: "Monke", e: {}, it: 0, tg: 0 } });
             ws.send(JSON.stringify({ t: "hi", id: ws.id, r: ws.role }));
             sendGrants(ws); onJoin(ws);
@@ -692,6 +829,8 @@ wss.on("connection", (ws, req) => {
             doReport(ws, m);
         } else if (m.t === "callmod" && ws.room) {
             doCallMod(ws);
+        } else if (m.t === "ac" && ws.room) {
+            GA.client(ws, m);
         } else if (m.t === "cmd" && ws.room && !ws.role) {
             GA.flag(ws, "fakecmd", "sent a staff command (" + str(m.k, 12) + ") without any staff role");
         } else if (m.t === "cmd" && ws.room && ws.role) {
@@ -772,6 +911,8 @@ wss.on("connection", (ws, req) => {
                 saveStaff();
             }
             else apply(tp);
+        } else if (!["join", "save", "restore", "s", "chat", "rtc", "check", "report", "callmod", "cmd", "ac"].includes(m.t)) {
+            GA.flag(ws, "badpacket", "sent an unknown packet type (" + clean(str(m.t, 16), 16) + ")");
         }
     });
     ws.on("close", () => {
@@ -781,7 +922,7 @@ wss.on("connection", (ws, req) => {
         ws.room.m.delete(ws.id);
         if (!ws.room.m.size) rooms.delete(ws.rname);
     });
-    ws.on("error", () => { });
+    ws.on("error", e => { if (/max payload/i.test(String(e && e.message))) GA.flag(ws, "badpacket", "sent an oversized packet (over 16 KB)"); });
 });
 
 // what other players are allowed to see about a player (undercover staff look like ordinary players)
