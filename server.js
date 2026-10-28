@@ -94,6 +94,11 @@ console.log("Staff loaded: " + [...ROLE.values()].filter(r => r === "owner").len
 const BANF = dp("bans.json");
 let bans = new Set(); try { bans = new Set(JSON.parse(fs.readFileSync(BANF, "utf8"))); } catch (e) { }
 const saveBans = () => { try { fs.writeFileSync(BANF, JSON.stringify([...bans])); } catch (e) { } };
+// ban memory: who was ever banned and from which IP (hashed). Used to catch ID resets and alt accounts after a ban.
+const BMF = dp("banmeta.json"), BM = readJSON(BMF, {}), saveBM = () => writeJSON(BMF, BM);
+const noteBan = (uh, ip) => { if (!uh) return; BM[uh] = { t: Date.now(), ih: ip ? sha("ip:" + ip) : (BM[uh] && BM[uh].ih) || "" }; saveBM(); };
+const noteUnban = uh => { if (BM[uh]) { BM[uh].ih = ""; saveBM(); } };
+const ipLinked = ip => { const ih = sha("ip:" + ip), n = Date.now(); for (const k in BM) if (BM[k].ih === ih && bans.has(k) && n - BM[k].t < 30 * 86400000) return k; return ""; };
 
 /* ---------- COSMETIC CATALOG (server copy: anything not listed here is rejected) ---------- */
 const SLOTS = {
@@ -268,7 +273,8 @@ setInterval(() => { const n = Date.now(); logTok.forEach((v, k) => v < n && logT
 const ipOf = req => (TRUST_PROXY && String(req.headers["x-forwarded-for"] || "").split(",")[0].trim()) || req.socket.remoteAddress || "?";
 const adminOK = req => {
     const ip = ipOf(req), n = Date.now(), F = (adminFails.get(ip) || []).filter(t => n - t < 600000);
-    if (F.length >= 10) { GA.raw("Admin dashboard brute force", "Many failed admin-key attempts from " + GA.mask(ip), 0xe62117); return 429; }
+    if (F.length >= 3) { const lk = ipLinked(ip); GA.raw("Admin dashboard brute force", F.length + " failed admin-key attempts in 10 min from " + GA.mask(ip) + (lk ? " (same IP as banned player ref " + lk.slice(0, 10) + ")" : ""), 0xe62117); }
+    if (F.length >= 10) return 429;
     const given = String(req.headers.authorization || "").replace(/^Bearer /, "");
     if (crypto.timingSafeEqual(Buffer.from(sha(given)), Buffer.from(sha(ADMIN_KEY))) || sessOK(given)) return 200;
     F.push(n); adminFails.set(ip, F); return 401;
@@ -341,7 +347,7 @@ const adminApi = (req, res, route) => {
                 socksOf(uh).forEach(w => { w.role = r; if (!r && w.uc) { w.uc = 0; } }); logEv("role", uh, p.n, r || "none"); return send(200, { ok: 1, note: "Takes effect in-game the next time they change map / reconnect." });
             }
             if (route === "ban") {
-                if (m.on) { if (ROLE.get(uh) === "owner") return send(400, { error: "cannot ban an owner" }); bans.add(uh); socksOf(uh).forEach(w => { w.send(JSON.stringify({ t: "ev", k: "banned" })); w.close(); }); } else bans.delete(uh);
+                if (m.on) { if (ROLE.get(uh) === "owner") return send(400, { error: "cannot ban an owner" }); bans.add(uh); noteBan(uh, (socksOf(uh)[0] || {}).ip); socksOf(uh).forEach(w => { w.send(JSON.stringify({ t: "ev", k: "banned" })); w.close(); }); } else { bans.delete(uh); noteUnban(uh); }
                 saveBans(); logEv(m.on ? "ban" : "unban", uh, p.n, ""); return send(200, { ok: 1 });
             }
             if (route === "kick") { socksOf(uh).forEach(w => { w.send(JSON.stringify({ t: "ev", k: "kicked" })); w.close(); }); logEv("kick", uh, p.n, ""); return send(200, { ok: 1 }); }
@@ -539,14 +545,14 @@ const doReport = (ws, m) => {
 const GA = (() => {
     const WT = {
         speed: 3, teleport: 5, hands: 4, velocity: 3, flood: 2, cosmetic: 6, unowned: 5, staffitem: 10, economy: 5, bounds: 4, chat: 1, report: 10, fakecmd: 10, privesc: 10, restore: 3, banevade: 10, msgflood: 3, impersonate: 4, selfmod: 10,
-        tamper: 40, devtools: 12, noguard: 6, badpacket: 2, badword: 3, chatspam: 4
+        tamper: 40, altip: 3, devtools: 12, noguard: 6, badpacket: 2, badword: 3, chatspam: 4
     };
     const LBL = {
         speed: "Impossible speed", teleport: "Teleporting", hands: "Impossible arm positions", velocity: "Impossible velocity values", flood: "Update flooding", cosmetic: "Illegal cosmetic", unowned: "Wearing a cosmetic they don't own", staffitem: "Staff-only item", economy: "Coins/candy tampering", bounds: "Outside the map", chat: "Chat rate limit", report: "Mass reports", fakecmd: "Fake staff command", privesc: "Privilege escalation attempt", restore: "Account-restore brute force", banevade: "Ban evasion attempt", msgflood: "Packet flooding", impersonate: "Staff impersonation", selfmod: "Tampered character size",
-        tamper: "Client tampering / script injection", devtools: "Developer tools opened", noguard: "Modified or non-browser client", badpacket: "Malformed / unknown packets", badword: "Blocked word in chat or name", chatspam: "Chat spam (muted)"
+        tamper: "Client tampering / script injection", altip: "Same IP as a banned player", devtools: "Developer tools opened", noguard: "Modified or non-browser client", badpacket: "Malformed / unknown packets", badword: "Blocked word in chat or name", chatspam: "Chat spam (muted)"
     };
     const IMM = new Set(["staffitem", "fakecmd", "privesc", "banevade", "selfmod", "report", "tamper", "devtools", "noguard"]);   // these alert Discord at once, whatever the score
-    const THR = { badword: 0, chatspam: 0, tamper: 0, devtools: 0, noguard: 0 };                                                   // kinds that are logged + sent to Discord EVERY time; the rest are collapsed per 10 s (repeat counts are included)
+    const THR = { altip: 300000, banevade: 0, badword: 0, chatspam: 0, tamper: 0, devtools: 0, noguard: 0 };                                                   // kinds that are logged + sent to Discord EVERY time; the rest are collapsed per 10 s (repeat counts are included)
     const rec = new Map(), recent = [], raws = new Map(), rp = new Map(), acts = new Map(), ipb = new Map();
     const BOUNDS = { lobby: [2600, 1500], city: [3400, 1700], forest: [3800, 1700], sky: [3400, 1800], staff: [2800, 1200] };
     const mask = ip => String(ip || "?").replace(/^(\d+\.\d+)\.\d+\.\d+$/, "$1.x.x");
@@ -604,7 +610,7 @@ const GA = (() => {
     const autoban = (ws, r, why, pl) => {   // never staff / creators; permanent (by player ID), reversible from the dashboard (Players > Unban)
         if (ws.role || ws.banned) return; ws.banned = 1;
         const n = Date.now(), uh = ws.uh;
-        if (uh) { bans.add(uh); saveBans(); } else if (ws.ip) ipb.set(ws.ip, n + 86400000);   // no player ID = not a normal browser client: block that IP for 24 h
+        if (uh) { bans.add(uh); saveBans(); noteBan(uh, ws.ip); } else if (ws.ip) ipb.set(ws.ip, n + 86400000);   // no player ID = not a normal browser client: block that IP for 24 h
         post({
             embeds: [{
                 title: "⛔ GorilAgent: AUTO-BAN", color: 0xe62117, timestamp: new Date(n).toISOString(), fields: [
@@ -642,7 +648,7 @@ const GA = (() => {
             }]
         });
         const kinds = Object.keys(r.cnt).length;
-        if (AUTOBAN && !ws.role && (kind === "tamper" || (r.score >= AUTOBAN_SCORE && kinds >= 2))) return autoban(ws, r, kind === "tamper" ? "client tampering: " + detail : "risk score " + r.score.toFixed(1) + " (" + kinds + " kinds of detection)", P);
+        if (AUTOBAN && !ws.role && !(ws.uh && bans.has(ws.uh)) && (kind === "tamper" || (r.score >= AUTOBAN_SCORE && kinds >= 2))) return autoban(ws, r, kind === "tamper" ? "client tampering: " + detail : "risk score " + r.score.toFixed(1) + " (" + kinds + " kinds of detection)", P);
         if (r.score >= 22 && n - r.hi > 600000) { r.hi = n; r.alert = n; alert("high", ws, r, P); }
         else if ((IMM.has(kind) || r.score >= 10) && n - r.alert > 300000) { r.alert = n; alert("sus", ws, r, P); }
     };
@@ -701,10 +707,11 @@ const GA = (() => {
         }
     }, 10000);
 
+    const evade = (ws, why) => { if (ws.role) return; flag(ws, "banevade", why); const r = rec.get(ws.uh || "id:" + ws.id); if (AUTOBAN && r) autoban(ws, r, why); };   // deliberate ban evasion: ban the new ID too
     const risk = () => [...rec.values()].map(r => ({ name: r.name, ref: r.ref, score: +(r.score * Math.pow(0.5, (Date.now() - r.t) / 600000)).toFixed(1), kinds: r.cnt })).filter(r => r.score >= 1).sort((a, b) => b.score - a.score).slice(0, 25);
     setInterval(() => { const n = Date.now(); rec.forEach((r, k) => { if (n - r.t > 7200000) rec.delete(k); }); rp.forEach((L, k) => { if (!L.some(x => n - x.t < 900000)) rp.delete(k); }); acts.forEach((L, k) => { if (!L.some(t => n - t < 120000)) acts.delete(k); }); ipb.forEach((t, k) => { if (t < n) ipb.delete(k); }); raws.forEach((o, k) => { if (n - o.t > 3600000) raws.delete(k); }); }, 600000);
     console.log("GorilAgent anti-cheat: active" + (WEBHOOK3_OK ? " (Discord alerts on - every detection is sent)" : " (NO valid DISCORD_ANTICHEAT_WEBHOOK - alerts go to the console / dashboard only)") + (AUTOBAN ? ", auto-ban ON at score " + AUTOBAN_SCORE : ", auto-ban OFF") + (AUTOKICK && !AUTOBAN ? ", auto-kick ON" : ""));
-    return { flag, raw, mask, reported, checkOutfit, checkName, bounds, staffAct, risk, recent, client, ipBanned: ip => (ipb.get(ip) || 0) > Date.now() };
+    return { evade, flag, raw, mask, reported, checkOutfit, checkName, bounds, staffAct, risk, recent, client, ipBanned: ip => (ipb.get(ip) || 0) > Date.now() };
 })();
 
 // --- "Call a mod": notifies every mod/owner online (any room) and posts to the call-a-mod Discord webhook ---
@@ -780,8 +787,13 @@ wss.on("connection", (ws, req) => {
         if (m.t === "join" && !ws.room) {
             // the role comes ONLY from the server's own list, matched against the player's permanent ID
             const uid = norm(m.uid); ws.uh = uid.length === 32 ? sha(uid) : null;
-            if (ws.uh && bans.has(ws.uh)) { ws.send(JSON.stringify({ t: "ev", k: "banned" })); return ws.close(); }
+            if (ws.uh && bans.has(ws.uh)) { ws.send(JSON.stringify({ t: "ev", k: "banned" })); GA.flag(ws, "banevade", "banned player tried to join again (room " + str(m.room, 30) + ")"); return ws.close(); }
             ws.role = (ws.uh && ROLE.get(ws.uh)) || "";
+            if (ws.uh && !ws.role) {
+                if (m.bn && !bans.has(ws.uh)) { if (BM[ws.uh]) ws.send(JSON.stringify({ t: "ev", k: "unmark" })); else GA.evade(ws, "player ID was reset after a ban (this browser still carries the ban marker)"); }   // same ID that was unbanned: just clear the marker
+                const lk = ipLinked(ws.ip); if (lk && lk !== ws.uh) GA.flag(ws, "altip", "joined from the same IP as banned player ref " + lk.slice(0, 10) + " (possible ban-evasion alt)");
+                if (ws.readyState !== 1) return;
+            }
             ws.mu = ws.uh && (smute.get(ws.uh) || 0) > Date.now() ? 1 : 0;
             const name = str(m.room, 40).toLowerCase().replace(/[^a-z0-9-]/g, "") || "public-lobby";
             // the staff room only lets verified staff in (role comes from the server list, never the client)
@@ -895,7 +907,7 @@ wss.on("connection", (ws, req) => {
             console.log("[staff] " + ws.role + " " + me.rn + " -> " + k + " -> " + tp.rn); if (ws.role === "mod") GA.staffAct(ws, k, me);
             if (k === "ban") {
                 if (!O || !tp.ws.uh || tp.ws === ws) return;
-                bans.add(tp.ws.uh); saveBans(); tp.ws.send(JSON.stringify({ t: "ev", k: "banned" })); tp.ws.close();
+                bans.add(tp.ws.uh); saveBans(); noteBan(tp.ws.uh, tp.ws.ip); tp.ws.send(JSON.stringify({ t: "ev", k: "banned" })); tp.ws.close();
             }
             else if (k === "mod" || k === "unmod") {   // owner promotes / demotes moderators live; saved in staff.json
                 if (!O || !tp.ws.uh || tp.ws === ws || tp.ws.role === "owner") return;
