@@ -102,16 +102,20 @@ const ipLinked = ip => { const ih = sha("ip:" + ip), n = Date.now(); for (const 
 
 /* ---------- COSMETIC CATALOG (server copy: anything not listed here is rejected) ---------- */
 const SLOTS = {
-    hat: ["beanie", "party", "cowboy", "top", "prop", "halo", "crown", "wiz", "horns", "witch", "pumpkin", "mummy", "skullcap", "gpump", "cc_cap"],
+    hat: ["beanie", "party", "cowboy", "top", "prop", "halo", "crown", "wiz", "horns", "witch", "pumpkin", "mummy", "skullcap", "gpump", "cc_cap", "cc_ttcap"],
     face: ["shades", "monocle", "stache", "nose", "visor", "vamp", "stitch", "skullmask"],
-    back: ["pack", "cape", "wings", "jet", "bat", "ghost", "candybag", "broom", "scythe", "cc_cam"],
-    trail: ["spark", "fire", "bubble", "rain", "star", "heart", "bats", "candy", "wisp", "ember", "witchfire", "cc_sub"],
+    back: ["pack", "cape", "wings", "jet", "bat", "ghost", "candybag", "broom", "scythe", "cc_cam", "cc_ttcam"],
+    trail: ["spark", "fire", "bubble", "rain", "star", "heart", "bats", "candy", "wisp", "ember", "witchfire", "cc_sub", "cc_ttnote"],
     hand: [],
 };
-// staff-only cosmetics. "st_o*" = owner only, the rest = any staff. "st_stick" is THE STICK (staff badge item).
+// staff-only cosmetics. "st_o*" = owner only, the rest = any staff (ids must stay <= 12 chars). "st_stick" is THE STICK (staff badge item).
+// content-creator cosmetics ("cc_*", YouTube + TikTok sets) live in SLOTS above: creators can wear them all, anyone else needs the owner to give them.
 const STAFF_SLOTS = {
-    hat: ["st_ocrown", "st_oflame", "st_modhat"], face: ["st_olaser", "st_shades"],
-    back: ["st_ocape", "st_odragon", "st_mcape", "st_hammer"], trail: ["st_oaura", "st_ogalaxy", "st_maura"], hand: ["st_stick"],
+    hat: ["st_ocrown", "st_oflame", "st_modhat", "st_mhalo"],
+    face: ["st_olaser", "st_ovisor", "st_shades", "st_mvisor"],
+    back: ["st_ocape", "st_odragon", "st_ophoenix", "st_mcape", "st_hammer", "st_mshield"],
+    trail: ["st_oaura", "st_ogalaxy", "st_maura"],
+    hand: ["st_stick", "st_oscepter"],
 };
 const REG_IDS = new Set(Object.values(SLOTS).flat());          // items that can be owned / given by the owner
 const SLOT_OK = {}; for (const k in SLOTS) SLOT_OK[k] = new Set(SLOTS[k].concat(STAFF_SLOTS[k] || []));
