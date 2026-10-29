@@ -90,15 +90,45 @@ const isStaff = w => w.role === "owner" || w.role === "mod";   // content creato
 if (![...ROLE.values()].includes("owner")) console.log("WARNING: no owner is set. Set the OWNER_ID environment variable to your player ID (menu > Show), then restart.");
 console.log("Staff loaded: " + [...ROLE.values()].filter(r => r === "owner").length + " owner(s), " + [...ROLE.values()].filter(r => r === "mod").length + " mod(s)");
 
-// bans are stored as hashed IDs in bans.json (delete an entry to unban)
-const BANF = dp("bans.json");
-let bans = new Set(); try { bans = new Set(JSON.parse(fs.readFileSync(BANF, "utf8"))); } catch (e) { }
-const saveBans = () => { try { fs.writeFileSync(BANF, JSON.stringify([...bans])); } catch (e) { } };
+// bans.json: { "<hashed player id>": { until, reason, by, at } }   until = expiry time in ms, 0 = permanent.
+// (the old format - a plain list of IDs - still loads, as permanent bans). Delete an entry to unban.
+const BANF = dp("bans.json"), BAN_DAY = 86400000;
+class BanList extends Map {
+    has(k) { const b = super.get(k); if (!b) return false; if (b.until && b.until <= Date.now()) { this.expire(k); return false; } return true; }   // temporary bans lift themselves
+    add(k, info) { super.set(k, Object.assign({ until: 0, reason: "", by: "", at: Date.now() }, info || {})); return this; }
+    expire(k) { super.delete(k); try { noteUnban(k, false); saveBans(); } catch (e) { } }
+    purge() { const n = Date.now(); for (const [k, b] of [...super.entries()]) if (b.until && b.until <= n) this.expire(k); }
+}
+let bans = new BanList();
+try {
+    const j = JSON.parse(fs.readFileSync(BANF, "utf8"));
+    if (Array.isArray(j)) j.forEach(h => bans.add(String(h), { reason: "Banned by staff" }));
+    else if (j && typeof j === "object") for (const h in j) { const b = j[h] || {}; bans.add(h, { until: +b.until || 0, reason: String(b.reason || "").slice(0, 100), by: String(b.by || "").slice(0, 40), at: +b.at || 0 }); }
+} catch (e) { }
+const saveBans = () => { try { const o = {}; bans.forEach((b, k) => { o[k] = b; }); fs.writeFileSync(BANF, JSON.stringify(o)); } catch (e) { } };
 // ban memory: who was ever banned and from which IP (hashed). Used to catch ID resets and alt accounts after a ban.
 const BMF = dp("banmeta.json"), BM = readJSON(BMF, {}), saveBM = () => writeJSON(BMF, BM);
-const noteBan = (uh, ip) => { if (!uh) return; BM[uh] = { t: Date.now(), ih: ip ? sha("ip:" + ip) : (BM[uh] && BM[uh].ih) || "" }; saveBM(); };
-const noteUnban = uh => { if (BM[uh]) { BM[uh].ih = ""; saveBM(); } };
+const noteBan = (uh, ip) => { if (!uh) return; const o = BM[uh] || {}; BM[uh] = { t: Date.now(), ih: ip ? sha("ip:" + ip) : o.ih || "", s: (o.s || 0) + 1 }; saveBM(); };   // s = how many bans this player has had (auto-bans get longer with each one)
+const noteUnban = (uh, forgive) => { if (BM[uh]) { BM[uh].ih = ""; if (forgive && BM[uh].s > 0) BM[uh].s--; saveBM(); } };   // forgive = a staff member lifted it (counts as a false ban, so the strike is removed)
 const ipLinked = ip => { const ih = sha("ip:" + ip), n = Date.now(); for (const k in BM) if (BM[k].ih === ih && bans.has(k) && n - BM[k].t < 30 * 86400000) return k; return ""; };
+setInterval(() => bans.purge(), 60000);
+const fmtDur = ms => {   // 0 = permanent
+    if (!ms) return "permanent";
+    const m = Math.round(ms / 60000); if (m < 60) return m + " minute" + (m == 1 ? "" : "s");
+    const h = Math.round(ms / 3600000); if (h < 48) return h + " hour" + (h == 1 ? "" : "s");
+    const d = Math.round(ms / BAN_DAY); if (d < 60) return d % 7 == 0 ? d / 7 + " week" + (d == 7 ? "" : "s") : d + " days";
+    if (d < 730) { const mo = Math.round(d / 30); return mo + " month" + (mo == 1 ? "" : "s"); }
+    return Math.round(d / 365) + " years";
+};
+const banMsg = b => JSON.stringify({ t: "ev", k: "banned", perm: b.until ? 0 : 1, left: b.until ? Math.max(0, b.until - Date.now()) : 0, total: b.until ? Math.max(0, b.until - (b.at || Date.now())) : 0, reason: b.reason || "" });
+const sendBanned = (w, b) => { try { w.send(banMsg(b)); w.close(); } catch (e) { } };
+// ms = 0 means permanent. Kicks every open connection of that player and tells the client how long / why.
+const applyBan = (uh, ms, reason, by, ip) => {
+    bans.add(uh, { until: ms ? Date.now() + ms : 0, reason: String(reason || "").replace(/[\u0000-\u001f]/g, " ").slice(0, 100), by: String(by || "").slice(0, 40) });
+    noteBan(uh, ip); saveBans(); const b = bans.get(uh);
+    socksOf(uh).forEach(w => sendBanned(w, b)); return b;
+};
+const banMs = sec => { sec = +sec; return Number.isFinite(sec) && sec > 0 ? Math.min(Math.round(sec), 315360000) * 1000 : 0; };   // seconds from a staff client -> ms (max 10 years, 0 / missing = permanent)
 
 /* ---------- COSMETIC CATALOG (server copy: anything not listed here is rejected) ---------- */
 const SLOTS = {
@@ -242,7 +272,7 @@ const moveProfile = (from, to, withRole) => {
     profiles[to] = Object.assign({}, op, { first: Math.min(op.first || n, tp ? tp.first : n), logins: (op.logins || 0) + (tp ? tp.logins : 0), secs: (op.secs || 0) + (tp ? tp.secs : 0), last: n, ls: n, stub: 0 });
     delete profiles[from];
     const g = new Set(gl(to).concat(gl(from))); if (g.size) grants[to] = [...g]; delete grants[from]; saveGrants();
-    if (bans.has(from)) { bans.add(to); saveBans(); }
+    if (bans.has(from)) { bans.add(to, bans.get(from)); saveBans(); }
     if (withRole) {
         const r = ROLE.get(from); if (r && (RANK[r] > RANK[ROLE.get(to) || ""])) { ROLE.set(to, r); if (!CFG.has(from)) ROLE.delete(from); saveStaff(); socksOf(to).forEach(w => w.role = r); }
     }
@@ -285,7 +315,7 @@ const adminOK = req => {
 };
 const adminView = (uh, on) => {
     const p = profiles[uh], o = on.by.get(uh);
-    return { ref: uh, id: uh.slice(0, 10), n: p.n, coins: p.coins, candy: p.candy, own: Object.keys(p.own), granted: gl(uh), eq: p.eq, first: p.first, last: p.last, logins: p.logins, secs: Math.round(p.secs || 0), flags: p.flags || 0, stub: p.stub ? 1 : 0, role: ROLE.get(uh) || "", cfg: CFG.has(uh) ? 1 : 0, banned: bans.has(uh) ? 1 : 0, online: o ? 1 : 0, room: o ? o.room : "" };
+    return { ref: uh, id: uh.slice(0, 10), n: p.n, coins: p.coins, candy: p.candy, own: Object.keys(p.own), granted: gl(uh), eq: p.eq, first: p.first, last: p.last, logins: p.logins, secs: Math.round(p.secs || 0), flags: p.flags || 0, stub: p.stub ? 1 : 0, role: ROLE.get(uh) || "", cfg: CFG.has(uh) ? 1 : 0, banned: bans.has(uh) ? 1 : 0, banUntil: bans.has(uh) ? bans.get(uh).until : 0, banReason: bans.has(uh) ? bans.get(uh).reason : "", online: o ? 1 : 0, room: o ? o.room : "" };
 };
 const findRef = r => { r = String(r || "").toLowerCase(); return /^[a-f0-9]{64}$/.test(r) && profiles[r] ? r : null; };
 const adminApi = (req, res, route) => {
@@ -306,7 +336,7 @@ const adminApi = (req, res, route) => {
             if (route === "overview") {
                 const list = Object.keys(profiles).filter(h => !profiles[h].stub), day = n - 86400000;
                 const h24 = stats.hist.filter(x => x[0] > day), peak = h24.reduce((a, x) => Math.max(a, x[1]), on.total);
-                return send(200, { online: on.total, unique: on.by.size, rooms: on.rms, peak24: peak, total: list.length, new24: list.filter(h => profiles[h].first > day).length, new7: list.filter(h => profiles[h].first > n - 7 * 86400000).length, active24: list.filter(h => profiles[h].last > day).length, hist: stats.hist, events: events.slice(-80).reverse(), coinsTotal: list.reduce((a, h) => a + profiles[h].coins, 0), banned: bans.size, now: n, webhook: WEBHOOK_OK ? 1 : 0 });
+                return send(200, { online: on.total, unique: on.by.size, rooms: on.rms, peak24: peak, total: list.length, new24: list.filter(h => profiles[h].first > day).length, new7: list.filter(h => profiles[h].first > n - 7 * 86400000).length, active24: list.filter(h => profiles[h].last > day).length, hist: stats.hist, events: events.slice(-80).reverse(), coinsTotal: list.reduce((a, h) => a + profiles[h].coins, 0), banned: (bans.purge(), bans.size), now: n, webhook: WEBHOOK_OK ? 1 : 0 });
             }
             if (route === "players") {
                 const q = str(m.q, 40).toLowerCase(); let L = Object.keys(profiles).filter(h => !profiles[h].stub || on.by.has(h));
@@ -350,9 +380,11 @@ const adminApi = (req, res, route) => {
                 if (r) ROLE.set(uh, r); else ROLE.delete(uh); saveStaff();
                 socksOf(uh).forEach(w => { w.role = r; if (!r && w.uc) { w.uc = 0; } }); logEv("role", uh, p.n, r || "none"); return send(200, { ok: 1, note: "Takes effect in-game the next time they change map / reconnect." });
             }
-            if (route === "ban") {
-                if (m.on) { if (ROLE.get(uh) === "owner") return send(400, { error: "cannot ban an owner" }); bans.add(uh); noteBan(uh, (socksOf(uh)[0] || {}).ip); socksOf(uh).forEach(w => { w.send(JSON.stringify({ t: "ev", k: "banned" })); w.close(); }); } else { bans.delete(uh); noteUnban(uh); }
-                saveBans(); logEv(m.on ? "ban" : "unban", uh, p.n, ""); return send(200, { ok: 1 });
+            if (route === "ban") {   // m.on = 1 bans (m.dur = seconds, 0 / missing = permanent; m.reason = text shown to the player), m.on = 0 unbans
+                let ms = 0;
+                if (m.on) { if (ROLE.get(uh) === "owner") return send(400, { error: "cannot ban an owner" }); ms = banMs(m.dur); applyBan(uh, ms, str(m.reason, 100) || "Banned by staff", "dashboard", (socksOf(uh)[0] || {}).ip); }
+                else { bans.delete(uh); noteUnban(uh, true); }
+                saveBans(); logEv(m.on ? "ban" : "unban", uh, p.n, m.on ? "dashboard ban: " + fmtDur(ms) + (m.reason ? " - " + str(m.reason, 100) : "") : ""); return send(200, { ok: 1 });
             }
             if (route === "kick") { socksOf(uh).forEach(w => { w.send(JSON.stringify({ t: "ev", k: "kicked" })); w.close(); }); logEv("kick", uh, p.n, ""); return send(200, { ok: 1 }); }
             if (route === "link") {   // m.ref = OLD profile, m.to = NEW profile (the one the player is using now)
@@ -611,24 +643,43 @@ const GA = (() => {
         if (hi && AUTOKICK && !AUTOBAN && !isStaff(ws) && !ws.role && ws.readyState === 1) { ws.send(JSON.stringify({ t: "ev", k: "kicked" })); ws.close(); }
     };
 
-    const autoban = (ws, r, why, pl) => {   // never staff / creators; permanent (by player ID), reversible from the dashboard (Players > Unban)
+    /* AUTO-BAN LENGTHS. Hacking / injection / ban evasion = PERMANENT. Everything else is a temporary ban whose length depends on the
+       worst thing the player was caught doing, and it DOUBLES with every earlier ban (3 earlier bans, or anything over a year = permanent).
+       Edit the numbers (days) here if you want different lengths. */
+    const PERM_KINDS = new Set(["tamper", "selfmod", "privesc", "fakecmd", "banevade"]);
+    const TIERS = [
+        [7, ["chat", "badword", "chatspam", "report", "noguard", "devtools", "badpacket", "msgflood"]],      // minor: 1 week
+        [28, ["speed", "teleport", "hands", "velocity", "bounds", "flood", "altip"]],                          // movement / flooding cheats: 4 weeks
+        [90, ["staffitem", "impersonate", "economy", "unowned", "cosmetic", "restore"]]                        // item / economy abuse: 3 months
+    ];
+    const banLen = (r, uh, perm) => {   // -> ms, 0 = permanent
+        if (perm || Object.keys(r.cnt).some(k => PERM_KINDS.has(k))) return 0;
+        let d = 0; for (const [days, ks] of TIERS) if (ks.some(k => r.cnt[k])) d = Math.max(d, days); if (!d) d = 14;
+        const strikes = (uh && BM[uh] && BM[uh].s) || 0; d *= Math.pow(2, strikes);
+        return strikes >= 3 || d > 365 ? 0 : Math.round(d * BAN_DAY);
+    };
+    const topKinds = r => Object.keys(r.cnt).sort((a, b) => (WT[b] || 2) * r.cnt[b] - (WT[a] || 2) * r.cnt[a]).slice(0, 3).map(k => LBL[k] || k).join(", ");
+
+    const autoban = (ws, r, why, pl, perm) => {   // never staff / creators. Temporary or permanent (see above), by player ID; reversible from the dashboard (Players > Unban)
         if (ws.role || ws.banned) return; ws.banned = 1;
-        const n = Date.now(), uh = ws.uh;
-        if (uh) { bans.add(uh); saveBans(); noteBan(uh, ws.ip); } else if (ws.ip) ipb.set(ws.ip, n + 86400000);   // no player ID = not a normal browser client: block that IP for 24 h
+        const n = Date.now(), uh = ws.uh, ms = uh ? banLen(r, uh, perm) : 86400000, shown = "GorilAgent anti-cheat: " + topKinds(r);
+        let b;
+        if (uh) b = applyBan(uh, ms, shown, "GorilAgent", ws.ip);
+        else { if (ws.ip) ipb.set(ws.ip, n + 86400000); b = { until: n + 86400000, at: n, reason: shown }; }   // no player ID = not a normal browser client: block that IP for 24 h
         post({
             embeds: [{
-                title: "⛔ GorilAgent: AUTO-BAN", color: 0xe62117, timestamp: new Date(n).toISOString(), fields: [
+                title: "⛔ GorilAgent: AUTO-BAN (" + fmtDur(ms) + ")", color: 0xe62117, timestamp: new Date(n).toISOString(), fields: [
                     { name: "Player", value: "**" + clean(r.name, 12) + "**\nref `" + r.ref + "`" + (uh ? "" : "\n(no player ID - IP blocked 24 h)"), inline: true },
                     { name: "Risk score", value: r.score.toFixed(1), inline: true },
+                    { name: "Length", value: ms ? fmtDur(ms) + " (until <t:" + Math.floor((n + ms) / 1000) + ":f>)" : "PERMANENT", inline: true },
                     { name: "Reason", value: clean(why, 300) },
                     { name: "Detections", value: Object.keys(r.cnt).map(k => (LBL[k] || k) + " x" + r.cnt[k]).join(", ").slice(0, 900) || "-" },
                     { name: "Undo", value: "Dashboard > Players > open the player > Unban" }]
             }]
         });
-        logEv("ban", uh, r.name, "GorilAgent auto-ban: " + why); staffPing("⛔ GorilAgent banned " + r.name);
-        console.log("[gorilagent] AUTO-BAN " + r.name + " (" + why + ")");
-        const L = uh ? socksOf(uh) : [ws]; if (!L.includes(ws)) L.push(ws);
-        L.forEach(w => { try { w.send(JSON.stringify({ t: "ev", k: "banned" })); w.close(); } catch (e) { } });
+        logEv("ban", uh, r.name, "GorilAgent auto-ban (" + fmtDur(ms) + "): " + why); staffPing("⛔ GorilAgent banned " + r.name + " (" + fmtDur(ms) + ")");
+        console.log("[gorilagent] AUTO-BAN " + r.name + " " + fmtDur(ms) + " (" + why + ")");
+        if (!uh) sendBanned(ws, b); else if (ws.readyState === 1) sendBanned(ws, b);
     };
 
     const flag = (ws, kind, detail, pl) => {
@@ -652,7 +703,7 @@ const GA = (() => {
             }]
         });
         const kinds = Object.keys(r.cnt).length;
-        if (AUTOBAN && !ws.role && !(ws.uh && bans.has(ws.uh)) && (kind === "tamper" || (r.score >= AUTOBAN_SCORE && kinds >= 2))) return autoban(ws, r, kind === "tamper" ? "client tampering: " + detail : "risk score " + r.score.toFixed(1) + " (" + kinds + " kinds of detection)", P);
+        if (AUTOBAN && !ws.role && !(ws.uh && bans.has(ws.uh)) && (kind === "tamper" || (r.score >= AUTOBAN_SCORE && kinds >= 2))) return autoban(ws, r, kind === "tamper" ? "client tampering: " + detail : "risk score " + r.score.toFixed(1) + " (" + kinds + " kinds of detection)", P, kind === "tamper");
         if (r.score >= 22 && n - r.hi > 600000) { r.hi = n; r.alert = n; alert("high", ws, r, P); }
         else if ((IMM.has(kind) || r.score >= 10) && n - r.alert > 300000) { r.alert = n; alert("sus", ws, r, P); }
     };
@@ -711,7 +762,7 @@ const GA = (() => {
         }
     }, 10000);
 
-    const evade = (ws, why) => { if (ws.role) return; flag(ws, "banevade", why); const r = rec.get(ws.uh || "id:" + ws.id); if (AUTOBAN && r) autoban(ws, r, why); };   // deliberate ban evasion: ban the new ID too
+    const evade = (ws, why) => { if (ws.role) return; flag(ws, "banevade", why); const r = rec.get(ws.uh || "id:" + ws.id); if (AUTOBAN && r) autoban(ws, r, why, undefined, true); };   // deliberate ban evasion: ban the new ID too
     const risk = () => [...rec.values()].map(r => ({ name: r.name, ref: r.ref, score: +(r.score * Math.pow(0.5, (Date.now() - r.t) / 600000)).toFixed(1), kinds: r.cnt })).filter(r => r.score >= 1).sort((a, b) => b.score - a.score).slice(0, 25);
     setInterval(() => { const n = Date.now(); rec.forEach((r, k) => { if (n - r.t > 7200000) rec.delete(k); }); rp.forEach((L, k) => { if (!L.some(x => n - x.t < 900000)) rp.delete(k); }); acts.forEach((L, k) => { if (!L.some(t => n - t < 120000)) acts.delete(k); }); ipb.forEach((t, k) => { if (t < n) ipb.delete(k); }); raws.forEach((o, k) => { if (n - o.t > 3600000) raws.delete(k); }); }, 600000);
     console.log("GorilAgent anti-cheat: active" + (WEBHOOK3_OK ? " (Discord alerts on - every detection is sent)" : " (NO valid DISCORD_ANTICHEAT_WEBHOOK - alerts go to the console / dashboard only)") + (AUTOBAN ? ", auto-ban ON at score " + AUTOBAN_SCORE : ", auto-ban OFF") + (AUTOKICK && !AUTOBAN ? ", auto-kick ON" : ""));
@@ -791,7 +842,7 @@ wss.on("connection", (ws, req) => {
         if (m.t === "join" && !ws.room) {
             // the role comes ONLY from the server's own list, matched against the player's permanent ID
             const uid = norm(m.uid); ws.uh = uid.length === 32 ? sha(uid) : null;
-            if (ws.uh && bans.has(ws.uh)) { ws.send(JSON.stringify({ t: "ev", k: "banned" })); GA.flag(ws, "banevade", "banned player tried to join again (room " + str(m.room, 30) + ")"); return ws.close(); }
+            if (ws.uh && bans.has(ws.uh)) { ws.send(banMsg(bans.get(ws.uh))); GA.flag(ws, "banevade", "banned player tried to join again (room " + str(m.room, 30) + ")"); return ws.close(); }
             ws.role = (ws.uh && ROLE.get(ws.uh)) || "";
             if (ws.uh && !ws.role) {
                 if (m.bn && !bans.has(ws.uh)) { if (BM[ws.uh]) ws.send(JSON.stringify({ t: "ev", k: "unmark" })); else GA.evade(ws, "player ID was reset after a ban (this browser still carries the ban marker)"); }   // same ID that was unbanned: just clear the marker
@@ -911,7 +962,8 @@ wss.on("connection", (ws, req) => {
             console.log("[staff] " + ws.role + " " + me.rn + " -> " + k + " -> " + tp.rn); if (ws.role === "mod") GA.staffAct(ws, k, me);
             if (k === "ban") {
                 if (!O || !tp.ws.uh || tp.ws === ws) return;
-                bans.add(tp.ws.uh); saveBans(); noteBan(tp.ws.uh, tp.ws.ip); tp.ws.send(JSON.stringify({ t: "ev", k: "banned" })); tp.ws.close();
+                const ms = banMs(m.dur), why = cleanName(m.txt, 100) || "No reason given";   // m.dur = seconds picked in the staff menu (0 = permanent), m.txt = the reason
+                applyBan(tp.ws.uh, ms, why, "staff " + me.rn, tp.ws.ip); logEv("ban", tp.ws.uh, tp.rn, "staff ban (" + fmtDur(ms) + "): " + why);
             }
             else if (k === "mod" || k === "unmod") {   // owner promotes / demotes moderators live; saved in staff.json
                 if (!O || !tp.ws.uh || tp.ws === ws || tp.ws.role === "owner") return;
