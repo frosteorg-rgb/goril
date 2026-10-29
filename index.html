@@ -544,12 +544,158 @@
             setInterval(() => out({ t: "ac", k: "hb" }), 5000);
         })();
     </script>
+    <style>
+        /* ===== BANNED: every panel turns red and shows the ban details + a Discord button ===== */
+        .bbox {
+            display: none;
+            background: #b3261e;
+            color: #fff;
+            border: 3px solid #5c0a0a;
+            margin: 8px 10px;
+            padding: 8px 10px;
+            font: 12px/1.45 "Courier New",monospace;
+            text-align: left;
+            box-shadow: 3px 3px 0 #5c0a0a
+        }
+
+        body.banned .bbox {
+            display: block
+        }
+
+        .bbox b {
+            letter-spacing: 1px
+        }
+
+        .bbox .bdc, #bnr .bdc {
+            background: #5865f2 !important;
+            color: #fff !important;
+            border: 2px solid #fff !important;
+            box-shadow: none !important;
+            margin: 6px 0 0;
+            padding: 5px 8px;
+            font: bold 12px "Courier New",monospace;
+            cursor: pointer;
+            width: 100%
+        }
+
+        #bnr {
+            display: none;
+            position: fixed;
+            left: 0;
+            right: 0;
+            top: 0;
+            z-index: 2147483000;
+            background: #b3261e;
+            color: #fff;
+            border-bottom: 3px solid #5c0a0a;
+            padding: 6px 10px;
+            font: bold 12px/1.35 "Courier New",monospace;
+            gap: 10px;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            flex-wrap: wrap
+        }
+
+        body.banned #bnr {
+            display: flex
+        }
+
+        #bnr .bdc {
+            width: auto;
+            margin: 0
+        }
+
+        body.banned #p, body.banned .pnl, body.banned #ch, body.banned #tut {
+            background: #fde3e0 !important;
+            color: #4a0b0b !important;
+            border-color: #7a0f0f !important;
+            box-shadow: 6px 6px 0 #7a0f0f !important
+        }
+
+        body.banned #sv, body.banned #cr {
+            background: #2a0707 !important;
+            border-color: #ff4d4d !important
+        }
+
+            body.banned .tb, body.banned #sv .tb, body.banned #cr .tb {
+                background: #c62828 !important;
+                border-bottom-color: #7a0f0f !important;
+                color: #fff !important
+            }
+
+        body.banned .fb {
+            background: #f6c9c4 !important;
+            color: #7a0f0f !important;
+            border-color: #7a0f0f !important;
+            box-shadow: 3px 3px 0 #7a0f0f !important
+        }
+
+        body.banned #p button:not(.bdc), body.banned .pnl button:not(.bdc), body.banned #ch button {
+            background: #fff1ef;
+            color: #7a0f0f;
+            border-color: #7a0f0f;
+            box-shadow: 2px 2px 0 #7a0f0f
+        }
+
+        body.banned #p button.on, body.banned .pnl button.on {
+            background: #ffb4ab
+        }
+
+        body.banned #p input, body.banned .pnl input, body.banned #ch input {
+            border-color: #7a0f0f;
+            background: #fff1ef;
+            color: #4a0b0b
+        }
+
+        body.banned #p .sec, body.banned #p details summary, body.banned .own, body.banned #p small {
+            color: #8a1414 !important
+        }
+
+        body.banned #sv button, body.banned #cr button {
+            border-color: #ff4d4d
+        }
+
+        body.banned #sv h4, body.banned #cr h4 {
+            color: #ff7a7a
+        }
+        /* owner ban picker */
+        #bd {
+            width: 340px;
+            z-index: 9
+        }
+
+            #bd .bl2 {
+                margin: 8px 0 3px;
+                font-size: 11px;
+                font-weight: bold;
+                letter-spacing: 2px
+            }
+
+            #bd button.red.on {
+                background: #ffd23f
+            }
+    </style>
 </head>
 <body>
     <canvas id="c"></canvas>
     <div id="bar"><button class="fb" id="cb">💬 Chat (Enter)</button><button class="fb" id="vb">🎤 Voice: off (V)</button><button class="fb" id="pb">👥 Players (Tab)</button><button class="fb" id="mb">☰ Menu (M)</button><button class="fb" id="sb" hidden>🛡 Staff (Q)</button></div>
     <div id="tut" hidden style="position:fixed;right:12px;top:118px;width:min(300px,44%);font-size:13px;opacity:.95;box-sizing:border-box;background:#f3e9d2;color:#3a2a1c;font-family:Courier New,monospace;border:3px solid #3a2a1c;box-shadow:4px 4px 0 #3a2a1c;padding:14px;z-index:5"><b>Tutorial <span id="tn"></span></b><p id="tt" style="margin:8px 0"></p><button id="tnx">Next</button><button id="tsk">Skip</button></div>
     <div id="ch" hidden><input type="text" id="ci" maxlength="120" placeholder="Say something...  (Enter = send, Esc = close)" autocomplete="off"><button id="cs">Send</button></div>
+    <div id="bnr"><span id="bnrt"></span><button class="bdc">💬 Report a false ban on Discord</button></div>
+    <div id="bd" class="pnl" hidden>
+        <div class="tb"><span>BAN PLAYER</span><span id="bdx" style="cursor:pointer">[x]</span></div>
+        <div class="bd">
+            <div id="bdn" style="text-align:center"></div>
+            <div class="bl2">HOW LONG</div>
+            <div id="bdl"></div>
+            <input type="text" id="bdc" maxlength="8" placeholder="Or custom: 10d, 6h, 2w, 3mo, 1y" style="margin:6px 0 0">
+            <div class="bl2">REASON (shown to the player)</div>
+            <input type="text" id="bdr" maxlength="100" placeholder="e.g. Harassment in chat" style="margin:0 0 6px">
+            <div id="bds" style="font-weight:bold;margin:4px 0"></div>
+            <div style="text-align:center"><button id="bdok" class="red">Ban</button><button id="bdno">Cancel</button></div>
+        </div>
+    </div>
     <div id="pf" class="pnl" hidden>
         <div class="tb"><span>PLAYER</span><span id="pfx" style="cursor:pointer">[x]</span></div>
         <div class="bd">
@@ -1525,8 +1671,8 @@
             if (e.back == "st_hammer") { c.save(); c.translate(-25, -16); c.rotate(-.55 + Math.sin(g.t * 3) * .05); c.fillStyle = "#6b4526"; c.fillRect(-2.5, -2, 5, 32); c.fillStyle = "#ffd23f"; c.fillRect(-2.8, 22, 5.6, 2.5); c.fillRect(-2.8, 6, 5.6, 2); c.shadowColor = "#ff3b3b"; c.shadowBlur = 9; c.fillStyle = "#8b95a6"; c.beginPath(); c.roundRect(-15, -15, 30, 14, 2.5); c.fill(); c.shadowBlur = 0; c.fillStyle = "#ffd23f"; c.fillRect(-15, -15, 4, 14); c.fillRect(11, -15, 4, 14); c.strokeStyle = "#ff3b3b"; c.lineWidth = 1.8; c.beginPath(); c.arc(0, -8, 4.6, 0, 7); c.moveTo(-3.2, -11.2); c.lineTo(3.2, -4.8); c.stroke(); c.restore() }
             if (e.back == "st_mcape") { const s = Math.max(-26, Math.min(6, -g.vx * f * .04)); c.beginPath(); c.moveTo(-2, -11); c.lineTo(-26 + s, 18); c.quadraticCurveTo(-16 + s * .6, 29, -6 + s * .4, 27); c.lineTo(3, 12); c.closePath(); c.fillStyle = "#1d4fa8"; c.fill(); c.strokeStyle = "#ffd23f"; c.lineWidth = 2; c.stroke(); c.fillStyle = "#0f2f6b"; c.beginPath(); c.moveTo(-6, -4); c.lineTo(-20 + s * .9, 16); c.lineTo(-10 + s * .5, 22); c.lineTo(-1, 8); c.fill(); modBadge(c, -10 + s * .45, 7, 5.5); c.fillStyle = "#ffd23f"; c.fillRect(-5, -13, 7, 3) }
             if (e.back == "st_mshield") { c.save(); c.translate(-25, -3 + Math.sin(g.t * 2.4) * 1.5); c.shadowColor = "#4fc3ff"; c.shadowBlur = 8 + 4 * Math.sin(g.t * 4); shp(c, 0, 0, 16); c.fillStyle = "#1d4fa8"; c.fill(); c.shadowBlur = 0; c.strokeStyle = "#ffd23f"; c.lineWidth = 2.6; c.stroke(); shp(c, 0, .5, 10.5); c.fillStyle = "#2b79e0"; c.fill(); star5(c, 0, -1, 6.2); c.fillStyle = "#ffd23f"; c.fill(); c.globalAlpha = .35; c.fillStyle = "#fff"; c.fillRect(-12 + ((g.t * 14) % 26), -14, 3, 26); c.globalAlpha = 1; c.restore() }
-            if (e.back == "st_ocape") { const s = Math.max(-28, Math.min(6, -g.vx * f * .04)); c.beginPath(); c.moveTo(-2, -12); c.lineTo(-28 + s, 18); c.quadraticCurveTo(-18 + s * .6, 31, -6 + s * .4, 28); c.lineTo(3, 12); c.closePath(); c.fillStyle = "#6a1fb5"; c.fill(); c.strokeStyle = "#ffd23f"; c.lineWidth = 2.2; c.stroke(); c.fillStyle = "#4a1280"; c.beginPath(); c.moveTo(-6, -4); c.lineTo(-22 + s * .9, 17); c.lineTo(-10 + s * .5, 23); c.lineTo(-1, 8); c.fill(); c.fillStyle = "#f4f1ea"; c.beginPath(); c.ellipse(-2, -11, 8, 4.2, -.5, 0, 7); c.fill(); c.fillStyle = "#111"; [[-5, -10], [-1, -12], [2, -9.5]].forEach(p => { c.fillRect(p[0], p[1], 1.4, 3) }); c.save(); c.translate(-10 + s * .45, 8); c.fillStyle = "#ffd23f"; c.beginPath(); c.moveTo(-5, 3); c.lineTo(-5.5, -3); c.lineTo(-2.5, 0); c.lineTo(0, -4.5); c.lineTo(2.5, 0); c.lineTo(5.5, -3); c.lineTo(5, 3); c.fill(); c.restore(); const tw = Math.sin(g.t * 5); if (tw > 0) { c.globalAlpha = tw; star5(c, -14 + s * .5, 16, 3); c.fillStyle = "#fff"; c.fill(); c.globalAlpha = 1 } }
-            if (e.back == "st_odragon") { const fl = Math.sin(g.t * 7) * 10; c.beginPath(); c.moveTo(-6, -8); c.lineTo(-52, -46 + fl); c.quadraticCurveTo(-40, -24 + fl * .8, -58, -8 + fl * .6); c.quadraticCurveTo(-42, -4 + fl * .5, -50, 20 + fl * .3); c.quadraticCurveTo(-30, 8, -8, 10); c.closePath(); const gr = c.createLinearGradient(-6, -8, -58, -8); gr.addColorStop(0, "#4a0810"); gr.addColorStop(1, "#d01c2f"); c.fillStyle = gr; c.fill(); c.strokeStyle = "#ffd23f"; c.lineWidth = 1.8; c.beginPath(); c.moveTo(-6, -8); c.lineTo(-52, -46 + fl); c.moveTo(-6, -7); c.lineTo(-58, -8 + fl * .6); c.moveTo(-6, -5); c.lineTo(-50, 20 + fl * .3); c.stroke(); c.fillStyle = "#ffd23f"; [[-52, -46 + fl], [-58, -8 + fl * .6], [-50, 20 + fl * .3]].forEach(p => { c.beginPath(); c.arc(p[0], p[1], 2.2, 0, 7); c.fill() }); c.fillStyle = "#2a0408"; c.beginPath(); c.moveTo(-6, -12); c.lineTo(-9, -20); c.lineTo(-2, -14); c.fill() }
+            if (e.back == "st_ocape") { const s = Math.max(-28, Math.min(6, -g.vx * f * .04)); c.beginPath(); c.moveTo(-2, -12); c.lineTo(-28 + s, 18); c.quadraticCurveTo(-18 + s * .6, 31, -6 + s * .4, 28); c.lineTo(3, 12); c.closePath(); c.fillStyle = "#6a1fb5"; c.fill(); c.strokeStyle = "#ffd23f"; c.lineWidth = 2.2; c.stroke(); c.fillStyle = "#4a1280"; c.beginPath(); c.moveTo(-6, -4); c.lineTo(-22 + s * .9, 17); c.lineTo(-10 + s * .5, 23); c.lineTo(-1, 8); c.fill(); c.fillStyle = "#f4f1ea"; c.beginPath(); c.ellipse(-2, -11, 8, 4.2, -.5, 0, 7); c.fill(); c.fillStyle = "#111";[[-5, -10], [-1, -12], [2, -9.5]].forEach(p => { c.fillRect(p[0], p[1], 1.4, 3) }); c.save(); c.translate(-10 + s * .45, 8); c.fillStyle = "#ffd23f"; c.beginPath(); c.moveTo(-5, 3); c.lineTo(-5.5, -3); c.lineTo(-2.5, 0); c.lineTo(0, -4.5); c.lineTo(2.5, 0); c.lineTo(5.5, -3); c.lineTo(5, 3); c.fill(); c.restore(); const tw = Math.sin(g.t * 5); if (tw > 0) { c.globalAlpha = tw; star5(c, -14 + s * .5, 16, 3); c.fillStyle = "#fff"; c.fill(); c.globalAlpha = 1 } }
+            if (e.back == "st_odragon") { const fl = Math.sin(g.t * 7) * 10; c.beginPath(); c.moveTo(-6, -8); c.lineTo(-52, -46 + fl); c.quadraticCurveTo(-40, -24 + fl * .8, -58, -8 + fl * .6); c.quadraticCurveTo(-42, -4 + fl * .5, -50, 20 + fl * .3); c.quadraticCurveTo(-30, 8, -8, 10); c.closePath(); const gr = c.createLinearGradient(-6, -8, -58, -8); gr.addColorStop(0, "#4a0810"); gr.addColorStop(1, "#d01c2f"); c.fillStyle = gr; c.fill(); c.strokeStyle = "#ffd23f"; c.lineWidth = 1.8; c.beginPath(); c.moveTo(-6, -8); c.lineTo(-52, -46 + fl); c.moveTo(-6, -7); c.lineTo(-58, -8 + fl * .6); c.moveTo(-6, -5); c.lineTo(-50, 20 + fl * .3); c.stroke(); c.fillStyle = "#ffd23f";[[-52, -46 + fl], [-58, -8 + fl * .6], [-50, 20 + fl * .3]].forEach(p => { c.beginPath(); c.arc(p[0], p[1], 2.2, 0, 7); c.fill() }); c.fillStyle = "#2a0408"; c.beginPath(); c.moveTo(-6, -12); c.lineTo(-9, -20); c.lineTo(-2, -14); c.fill() }
             if (e.back == "st_ophoenix") { const fl = Math.sin(g.t * 8) * .2; c.save(); c.translate(-6, -6); c.shadowColor = "#ff7a1a"; c.shadowBlur = 10; for (let i = 0; i < 6; i++) { const len = 44 - i * 3.5; c.save(); c.rotate(Math.PI + (i - 2.5) * .36 - .15 + fl * (1 + i * .12)); c.fillStyle = `hsl(${12 + i * 9},100%,${52 + i * 3}%)`; c.beginPath(); c.moveTo(0, 0); c.quadraticCurveTo(len * .5, -6, len, 0); c.quadraticCurveTo(len * .5, 6, 0, 0); c.fill(); c.fillStyle = "#fff3a8"; c.globalAlpha = .55; c.beginPath(); c.moveTo(0, 0); c.quadraticCurveTo(len * .45, -2, len * .75, 0); c.quadraticCurveTo(len * .45, 2, 0, 0); c.fill(); c.restore() } c.shadowBlur = 0; c.restore() }
             if (e.back == "cc_ttcam") { c.save(); c.translate(-33, -14 + Math.sin(g.t * 3) * 4); c.shadowColor = "#25f4ee"; c.shadowBlur = 8; c.strokeStyle = "#fff"; c.lineWidth = 2.4; c.beginPath(); c.arc(0, 0, 12, 0, 7); c.stroke(); c.shadowBlur = 0; c.strokeStyle = "#fe2c55"; c.lineWidth = 1; c.beginPath(); c.arc(0, 0, 14, -.4, 1.4); c.stroke(); c.strokeStyle = "#25f4ee"; c.beginPath(); c.arc(0, 0, 14, 2.7, 4.5); c.stroke(); c.fillStyle = "#0d0d10"; c.beginPath(); c.roundRect(-5, -8.5, 10, 17, 2.4); c.fill(); c.fillStyle = "#1c1c26"; c.fillRect(-4, -7, 8, 12.5); ttLogo(c, 0, -1.2, 5); c.fillStyle = Math.sin(g.t * 6) > 0 ? "#fe2c55" : "#5a1020"; c.beginPath(); c.arc(0, 7, 1.1, 0, 7); c.fill(); const hy = ((g.t * 18) % 18); c.globalAlpha = Math.max(0, 1 - hy / 18); c.fillStyle = "#fe2c55"; c.beginPath(); c.arc(-14, -4 - hy, 1.8, 0, 7); c.arc(-12, -4 - hy, 1.8, 0, 7); c.fill(); c.globalAlpha = 1; c.restore() }
             if (e.back == "jet") { c.fillStyle = "#778"; c.fillRect(-24, -12, 8, 22); c.fillRect(-15, -12, 7, 22); c.fillStyle = "#ff8a1a"; const fh = 6 + Math.random() * 8; c.beginPath(); c.moveTo(-24, 10); c.lineTo(-20, 10 + fh); c.lineTo(-16, 10); c.fill(); c.beginPath(); c.moveTo(-15, 10); c.lineTo(-11.5, 10 + fh); c.lineTo(-8, 10); c.fill() }
@@ -1547,7 +1693,7 @@
             if (e.face == "st_shades") { c.fillStyle = "#0a2a66"; c.beginPath(); c.roundRect(-3, -6.5, 15, 6.5, 2.2); c.fill(); c.strokeStyle = "#ffd23f"; c.lineWidth = 1.4; c.stroke(); c.fillStyle = "#ffd23f"; c.fillRect(11.5, -6.5, 2.5, 1.4); c.globalAlpha = .55; c.fillStyle = "#9fe0ff"; c.fillRect(-1.5 + (g.t * 9) % 14, -5.6, 1.8, 4.6); c.globalAlpha = 1; modBadge(c, 4.5, -3.2, 2.6) }
             if (e.face == "st_mvisor") { c.fillStyle = "#38e1ff55"; c.fillRect(-4, -7.5, 17, 8); c.strokeStyle = "#4fc3ff"; c.lineWidth = 1.2; c.strokeRect(-4, -7.5, 17, 8); c.fillStyle = "#fff"; c.globalAlpha = .75; c.fillRect(-4, -7.5 + (g.t * 9) % 8, 17, .9); c.globalAlpha = 1; c.fillStyle = "#ffd23f"; c.fillRect(-5.2, -8.2, 2, 9.6); modBadge(c, 12.5, -3.5, 3.2) }
             if (e.face == "st_olaser") { const pu = .75 + .25 * Math.sin(g.t * 22); c.globalAlpha = .35; c.fillStyle = "#ff1a1a"; c.beginPath(); c.arc(2, -2, 6.5, 0, 7); c.fill(); c.globalAlpha = 1; c.fillStyle = "#ff3b3b"; c.beginPath(); c.arc(2, -2, 3, 0, 7); c.fill(); c.fillStyle = "#fff"; c.beginPath(); c.arc(2, -2, 1.3, 0, 7); c.fill(); const bg = c.createLinearGradient(4, 0, 62, 0); bg.addColorStop(0, "rgba(255,40,40,.95)"); bg.addColorStop(1, "rgba(255,40,40,0)"); c.fillStyle = bg; c.fillRect(4, -3.8 * pu - .4, 58, 3.4 * pu + 1.2); c.fillStyle = "rgba(255,255,255,.85)"; c.fillRect(4, -2.7, 36 * pu, 1.2) }
-            if (e.face == "st_ovisor") { const gd = c.createLinearGradient(0, -8, 0, 0); gd.addColorStop(0, "#fff1a8"); gd.addColorStop(1, "#d9a400"); c.fillStyle = gd; c.beginPath(); c.roundRect(-4.5, -7.5, 18, 8, 3); c.fill(); c.strokeStyle = "#8a6400"; c.lineWidth = 1.1; c.stroke(); c.fillStyle = "#ffd23f"; [[-1, -7.5], [4.5, -7.5], [10, -7.5]].forEach(p => { c.beginPath(); c.moveTo(p[0] - 2, p[1]); c.lineTo(p[0], p[1] - 4); c.lineTo(p[0] + 2, p[1]); c.fill() }); c.fillStyle = `hsl(${350 + 10 * Math.sin(g.t * 4)},90%,${48 + 8 * Math.sin(g.t * 6)}%)`; c.beginPath(); c.arc(4.5, -3.5, 2.2, 0, 7); c.fill(); c.fillStyle = "#fff"; c.globalAlpha = .6; c.fillRect(-2.5, -6.2, 4, 1); c.globalAlpha = 1 }
+            if (e.face == "st_ovisor") { const gd = c.createLinearGradient(0, -8, 0, 0); gd.addColorStop(0, "#fff1a8"); gd.addColorStop(1, "#d9a400"); c.fillStyle = gd; c.beginPath(); c.roundRect(-4.5, -7.5, 18, 8, 3); c.fill(); c.strokeStyle = "#8a6400"; c.lineWidth = 1.1; c.stroke(); c.fillStyle = "#ffd23f";[[-1, -7.5], [4.5, -7.5], [10, -7.5]].forEach(p => { c.beginPath(); c.moveTo(p[0] - 2, p[1]); c.lineTo(p[0], p[1] - 4); c.lineTo(p[0] + 2, p[1]); c.fill() }); c.fillStyle = `hsl(${350 + 10 * Math.sin(g.t * 4)},90%,${48 + 8 * Math.sin(g.t * 6)}%)`; c.beginPath(); c.arc(4.5, -3.5, 2.2, 0, 7); c.fill(); c.fillStyle = "#fff"; c.globalAlpha = .6; c.fillRect(-2.5, -6.2, 4, 1); c.globalAlpha = 1 }
             if (e.face == "visor") { c.fillStyle = "#38e1ffaa"; c.fillRect(-4, -6, 16, 6) }
             if (e.face == "monocle") { c.strokeStyle = "#e5b800"; c.lineWidth = 1.6; c.beginPath(); c.arc(4, -2, 4, 0, 7); c.stroke() }
             if (e.face == "stache") { c.fillStyle = "#2a1a0a"; c.beginPath(); c.ellipse(7, 4, 6, 2.4, 0, 0, 7); c.fill() }
@@ -1562,12 +1708,12 @@
             if (e.hat == "cowboy") { c.fillStyle = "#8a5a2b"; c.beginPath(); c.ellipse(0, 4, 18, 4, 0, 0, 7); c.fill(); c.fillRect(-8, -8, 16, 12) }
             if (e.hat == "top") { c.fillStyle = "#111"; c.fillRect(-8, -14, 16, 18); c.fillRect(-12, 3, 24, 3); c.fillStyle = "#c22"; c.fillRect(-8, -1, 16, 3) }
             if (e.hat == "prop") { c.fillStyle = "#3a7bd5"; c.beginPath(); c.arc(0, 5, 8, Math.PI, 0); c.fill(); c.fillStyle = "#f33"; c.beginPath(); c.ellipse(0, -4, 14 * Math.abs(Math.cos(g.t * 20)), 2, 0, 0, 7); c.fill() }
-            if (e.hat == "st_ocrown") { const gd = c.createLinearGradient(0, -15, 0, 5); gd.addColorStop(0, "#fff3a0"); gd.addColorStop(.5, "#ffc21a"); gd.addColorStop(1, "#c98a00"); c.shadowColor = "#ffd23f"; c.shadowBlur = 7; c.fillStyle = gd; c.beginPath(); c.moveTo(-12, 5); c.lineTo(-13, -8); c.lineTo(-7, -1); c.lineTo(-4, -13); c.lineTo(0, -3); c.lineTo(4, -13); c.lineTo(7, -1); c.lineTo(13, -8); c.lineTo(12, 5); c.closePath(); c.fill(); c.shadowBlur = 0; c.strokeStyle = "#8a5a00"; c.lineWidth = 1; c.stroke(); c.fillStyle = "#b87900"; c.fillRect(-12, 2, 24, 3); c.fillStyle = `hsl(${350 + 8 * Math.sin(g.t * 4)},90%,${48 + 8 * Math.sin(g.t * 5)}%)`; c.beginPath(); c.arc(0, -.5, 2.5, 0, 7); c.fill(); c.fillStyle = "#3da5ff"; c.beginPath(); c.arc(-7, 3.5, 1.5, 0, 7); c.fill(); c.fillStyle = "#4be07a"; c.beginPath(); c.arc(7, 3.5, 1.5, 0, 7); c.fill(); c.fillStyle = "#fff"; [[-4, -13.5], [4, -13.5], [-13, -8.5], [13, -8.5]].forEach(p => { c.beginPath(); c.arc(p[0], p[1], 1.6, 0, 7); c.fill() }); const tw = Math.sin(g.t * 3.2); if (tw > 0) { c.globalAlpha = tw; star5(c, Math.sin(g.t * 1.3) * 9, -6, 3); c.fill(); c.globalAlpha = 1 } }
+            if (e.hat == "st_ocrown") { const gd = c.createLinearGradient(0, -15, 0, 5); gd.addColorStop(0, "#fff3a0"); gd.addColorStop(.5, "#ffc21a"); gd.addColorStop(1, "#c98a00"); c.shadowColor = "#ffd23f"; c.shadowBlur = 7; c.fillStyle = gd; c.beginPath(); c.moveTo(-12, 5); c.lineTo(-13, -8); c.lineTo(-7, -1); c.lineTo(-4, -13); c.lineTo(0, -3); c.lineTo(4, -13); c.lineTo(7, -1); c.lineTo(13, -8); c.lineTo(12, 5); c.closePath(); c.fill(); c.shadowBlur = 0; c.strokeStyle = "#8a5a00"; c.lineWidth = 1; c.stroke(); c.fillStyle = "#b87900"; c.fillRect(-12, 2, 24, 3); c.fillStyle = `hsl(${350 + 8 * Math.sin(g.t * 4)},90%,${48 + 8 * Math.sin(g.t * 5)}%)`; c.beginPath(); c.arc(0, -.5, 2.5, 0, 7); c.fill(); c.fillStyle = "#3da5ff"; c.beginPath(); c.arc(-7, 3.5, 1.5, 0, 7); c.fill(); c.fillStyle = "#4be07a"; c.beginPath(); c.arc(7, 3.5, 1.5, 0, 7); c.fill(); c.fillStyle = "#fff";[[-4, -13.5], [4, -13.5], [-13, -8.5], [13, -8.5]].forEach(p => { c.beginPath(); c.arc(p[0], p[1], 1.6, 0, 7); c.fill() }); const tw = Math.sin(g.t * 3.2); if (tw > 0) { c.globalAlpha = tw; star5(c, Math.sin(g.t * 1.3) * 9, -6, 3); c.fill(); c.globalAlpha = 1 } }
             if (e.hat == "st_mhalo") { c.save(); c.shadowColor = "#4fc3ff"; c.shadowBlur = 9; c.strokeStyle = "#4fc3ff"; c.lineWidth = 3; c.beginPath(); c.ellipse(0, -9, 11.5, 3.4, 0, 0, 7); c.stroke(); c.shadowBlur = 0; c.strokeStyle = "#e8f7ff"; c.lineWidth = 1; c.beginPath(); c.ellipse(0, -9, 11.5, 3.4, 0, 0, 7); c.stroke(); c.restore(); for (let i = 0; i < 3; i++) { const a = g.t * 2.2 + i * 2.09; shp(c, Math.cos(a) * 11.5, -9 + Math.sin(a) * 3.4, 2.8); c.fillStyle = "#ffd23f"; c.fill() } }
             if (e.hat == "st_modhat") { c.beginPath(); c.moveTo(-10, 5); c.quadraticCurveTo(-11, -8, 0, -8); c.quadraticCurveTo(11, -8, 10, 5); c.closePath(); c.fillStyle = "#1d4fa8"; c.fill(); c.fillStyle = "#0f2f6b"; c.fillRect(-10, 1.5, 20, 3.5); c.fillStyle = "#ffd23f"; c.fillRect(-10, .6, 20, 1.2); c.fillStyle = "#0b1b3d"; c.beginPath(); c.ellipse(11, 5, 7.5, 2.3, 0, 0, 7); c.fill(); c.fillStyle = "#ffd23f"; c.beginPath(); c.arc(0, -8, 1.5, 0, 7); c.fill(); modBadge(c, 3.5, -2, 5.2) }
             if (e.hat == "wiz") { c.fillStyle = "#5b2da8"; c.beginPath(); c.ellipse(0, 5, 15, 3.5, 0, 0, 7); c.fill(); c.beginPath(); c.moveTo(-9, 5); c.lineTo(9, 5); c.lineTo(3, -24); c.fill(); c.fillStyle = "#ffe14d"; c.beginPath(); c.arc(1, -6, 2.2, 0, 7); c.fill() }
             if (e.hat == "horns") { c.fillStyle = "#c01818";[-1, 1].forEach(s => { c.beginPath(); c.moveTo(s * 3, 4); c.lineTo(s * 9, -13); c.lineTo(s * 10, 4); c.fill() }) }
-            if (e.hat == "st_oflame") { for (let k = 0; k < 5; k++) { const x = -10 + k * 5, fh = 11 + Math.sin(g.t * 14 + k * 2) * 4 + Math.random() * 2 + (k == 2 ? 4 : 0); c.fillStyle = "#ff4a00"; c.beginPath(); c.moveTo(x - 3.6, -5); c.quadraticCurveTo(x - 1, -5 - fh * .6, x, -5 - fh); c.quadraticCurveTo(x + 1, -5 - fh * .6, x + 3.6, -5); c.fill(); c.fillStyle = "#ffb300"; c.beginPath(); c.moveTo(x - 2.2, -5); c.quadraticCurveTo(x, -5 - fh * .5, x, -5 - fh * .75); c.quadraticCurveTo(x + .5, -5 - fh * .4, x + 2.2, -5); c.fill(); c.fillStyle = "#fff2a8"; c.beginPath(); c.moveTo(x - 1, -5); c.quadraticCurveTo(x, -5 - fh * .45, x + 1, -5); c.fill() } c.fillStyle = "#ffcf33"; c.beginPath(); c.moveTo(-12, 5); c.lineTo(-12, -5); c.lineTo(12, -5); c.lineTo(12, 5); c.fill(); c.fillStyle = "#b3121a"; c.fillRect(-12, 0, 24, 3.2); c.fillStyle = "#fff3a0"; c.fillRect(-12, -5, 24, 1.4); c.fillStyle = "#ff2a2a"; [-7, 0, 7].forEach(x => { c.beginPath(); c.arc(x, 1.6, 1.5, 0, 7); c.fill() }); const ey = -((g.t * 22) % 22); c.globalAlpha = Math.max(0, 1 + ey / 22); c.fillStyle = "#ffb300"; c.beginPath(); c.arc(Math.sin(g.t * 3) * 9, -12 + ey, 1.3, 0, 7); c.fill(); c.globalAlpha = 1 }
+            if (e.hat == "st_oflame") { for (let k = 0; k < 5; k++) { const x = -10 + k * 5, fh = 11 + Math.sin(g.t * 14 + k * 2) * 4 + Math.random() * 2 + (k == 2 ? 4 : 0); c.fillStyle = "#ff4a00"; c.beginPath(); c.moveTo(x - 3.6, -5); c.quadraticCurveTo(x - 1, -5 - fh * .6, x, -5 - fh); c.quadraticCurveTo(x + 1, -5 - fh * .6, x + 3.6, -5); c.fill(); c.fillStyle = "#ffb300"; c.beginPath(); c.moveTo(x - 2.2, -5); c.quadraticCurveTo(x, -5 - fh * .5, x, -5 - fh * .75); c.quadraticCurveTo(x + .5, -5 - fh * .4, x + 2.2, -5); c.fill(); c.fillStyle = "#fff2a8"; c.beginPath(); c.moveTo(x - 1, -5); c.quadraticCurveTo(x, -5 - fh * .45, x + 1, -5); c.fill() } c.fillStyle = "#ffcf33"; c.beginPath(); c.moveTo(-12, 5); c.lineTo(-12, -5); c.lineTo(12, -5); c.lineTo(12, 5); c.fill(); c.fillStyle = "#b3121a"; c.fillRect(-12, 0, 24, 3.2); c.fillStyle = "#fff3a0"; c.fillRect(-12, -5, 24, 1.4); c.fillStyle = "#ff2a2a";[-7, 0, 7].forEach(x => { c.beginPath(); c.arc(x, 1.6, 1.5, 0, 7); c.fill() }); const ey = -((g.t * 22) % 22); c.globalAlpha = Math.max(0, 1 + ey / 22); c.fillStyle = "#ffb300"; c.beginPath(); c.arc(Math.sin(g.t * 3) * 9, -12 + ey, 1.3, 0, 7); c.fill(); c.globalAlpha = 1 }
             if (e.hat == "witch") { c.fillStyle = "#241040"; c.beginPath(); c.ellipse(0, 5, 16, 3.6, 0, 0, 7); c.fill(); c.beginPath(); c.moveTo(-9, 5); c.lineTo(9, 5); c.quadraticCurveTo(3, -8, 8, -24); c.quadraticCurveTo(-3, -16, -9, 5); c.fill(); c.fillStyle = "#e8761a"; c.fillRect(-9, -1, 18, 3.2); c.fillStyle = "#ffd23f"; c.fillRect(-2, -1.4, 4, 4) }
             if (e.hat == "pumpkin") { c.fillStyle = "#e8761a"; c.beginPath(); c.ellipse(0, 7, 13, 12, 0, 0, 7); c.fill(); c.fillStyle = "#c45a0c"; c.beginPath(); c.ellipse(-6, 7, 4, 11.5, 0, 0, 7); c.ellipse(6, 7, 4, 11.5, 0, 0, 7); c.fill(); c.fillStyle = "#3f7a1f"; c.fillRect(-2, -7, 4, 7); c.fillStyle = "#ffe14d"; c.beginPath(); c.moveTo(-1, 6); c.lineTo(3, 6); c.lineTo(1, 1); c.fill(); c.beginPath(); c.moveTo(5, 6); c.lineTo(9, 6); c.lineTo(7, 1); c.fill(); c.beginPath(); c.moveTo(-2, 11); c.lineTo(2, 10); c.lineTo(4, 12); c.lineTo(7, 10); c.lineTo(10, 11); c.lineTo(7, 16); c.lineTo(1, 16); c.fill() }
             if (e.hat == "mummy") { c.fillStyle = "#e6dcc0"; for (let i = 0; i < 4; i++) { const y = -1 + i * 2.8, hw = Math.sqrt(Math.max(0, 100 - (y - 8) ** 2)) + 1.2; c.fillRect(-hw, y, hw * 2, 2.2) } c.fillRect(-12, 5, 3, 9) }
@@ -1579,8 +1725,8 @@
             if (e.hat == "crown") { c.fillStyle = "#ffcc1a"; c.beginPath(); c.moveTo(-9, 5); c.lineTo(-9, -8); c.lineTo(-4, -2); c.lineTo(0, -10); c.lineTo(4, -2); c.lineTo(9, -8); c.lineTo(9, 5); c.fill() }
             c.restore(); c.restore();
             c.fillStyle = "#d9b38c"; c.strokeStyle = dk; c.lineWidth = 2; g.h.forEach(h => { c.beginPath(); c.arc(h.x / sz, h.y / sz, 7, 0, 7); c.fill(); c.stroke() });
-            if (e.hand == "st_stick") { const h = g.h[0]; c.save(); c.translate(h.x / sz, h.y / sz); c.rotate(f * .35); c.fillStyle = "#1d3f8a"; c.fillRect(-2.5, -58, 5, 68); c.fillStyle = "#ffd23f"; [-6, -22, -38, -52].forEach(y => c.fillRect(-3, y, 6, 2.6)); c.fillStyle = "#0f2f6b"; c.fillRect(-2.5, -4, 5, 14); modBadge(c, 0, -14, 4.6); c.strokeStyle = "#ffd23f"; c.lineWidth = 2; c.beginPath(); c.moveTo(-3, -56); c.quadraticCurveTo(-9, -66, -2, -70); c.moveTo(3, -56); c.quadraticCurveTo(9, -66, 2, -70); c.stroke(); c.shadowColor = "#4fe0ff"; c.shadowBlur = 8 + 5 * Math.sin(g.t * 5); c.fillStyle = "#7fe9ff"; c.beginPath(); c.arc(0, -64, 5, 0, 7); c.fill(); c.shadowBlur = 0; c.fillStyle = "#fff"; c.globalAlpha = .7; c.beginPath(); c.arc(-1.5, -65.5, 1.6, 0, 7); c.fill(); c.globalAlpha = 1; c.restore() }
-            if (e.hand == "st_oscepter") { const h = g.h[0]; c.save(); c.translate(h.x / sz, h.y / sz); c.rotate(f * .35); const gd = c.createLinearGradient(-3, 0, 3, 0); gd.addColorStop(0, "#fff0a0"); gd.addColorStop(.5, "#ffc21a"); gd.addColorStop(1, "#b87900"); c.fillStyle = gd; c.fillRect(-2.5, -58, 5, 68); c.fillStyle = "#8a5a00"; [-8, -26, -44].forEach(y => { c.beginPath(); c.ellipse(0, y, 4.2, 2, 0, 0, 7); c.fill() }); c.fillStyle = "#ffd23f"; [-1, 0, 1].forEach(s => { c.beginPath(); c.moveTo(s * 5 - 3, -58); c.lineTo(s * 7, -70); c.lineTo(s * 5 + 3, -58); c.fill() }); c.shadowColor = "#ffd23f"; c.shadowBlur = 10; c.fillStyle = "#ffc21a"; c.beginPath(); c.arc(0, -64, 6.5, 0, 7); c.fill(); c.shadowBlur = 0; c.fillStyle = `hsl(${350 + 8 * Math.sin(g.t * 4)},90%,${46 + 10 * Math.sin(g.t * 5)}%)`; c.beginPath(); c.arc(0, -64, 3.4, 0, 7); c.fill(); c.fillStyle = "#fff"; c.globalAlpha = .7; c.beginPath(); c.arc(-1.2, -65.4, 1.1, 0, 7); c.fill(); c.globalAlpha = 1; for (let i = 0; i < 3; i++) { const a = g.t * 3 + i * 2.1; star5(c, Math.cos(a) * 11, -64 + Math.sin(a) * 4, 2); c.fillStyle = i % 2 ? "#fff" : "#ffd23f"; c.fill() } c.restore() }
+            if (e.hand == "st_stick") { const h = g.h[0]; c.save(); c.translate(h.x / sz, h.y / sz); c.rotate(f * .35); c.fillStyle = "#1d3f8a"; c.fillRect(-2.5, -58, 5, 68); c.fillStyle = "#ffd23f";[-6, -22, -38, -52].forEach(y => c.fillRect(-3, y, 6, 2.6)); c.fillStyle = "#0f2f6b"; c.fillRect(-2.5, -4, 5, 14); modBadge(c, 0, -14, 4.6); c.strokeStyle = "#ffd23f"; c.lineWidth = 2; c.beginPath(); c.moveTo(-3, -56); c.quadraticCurveTo(-9, -66, -2, -70); c.moveTo(3, -56); c.quadraticCurveTo(9, -66, 2, -70); c.stroke(); c.shadowColor = "#4fe0ff"; c.shadowBlur = 8 + 5 * Math.sin(g.t * 5); c.fillStyle = "#7fe9ff"; c.beginPath(); c.arc(0, -64, 5, 0, 7); c.fill(); c.shadowBlur = 0; c.fillStyle = "#fff"; c.globalAlpha = .7; c.beginPath(); c.arc(-1.5, -65.5, 1.6, 0, 7); c.fill(); c.globalAlpha = 1; c.restore() }
+            if (e.hand == "st_oscepter") { const h = g.h[0]; c.save(); c.translate(h.x / sz, h.y / sz); c.rotate(f * .35); const gd = c.createLinearGradient(-3, 0, 3, 0); gd.addColorStop(0, "#fff0a0"); gd.addColorStop(.5, "#ffc21a"); gd.addColorStop(1, "#b87900"); c.fillStyle = gd; c.fillRect(-2.5, -58, 5, 68); c.fillStyle = "#8a5a00";[-8, -26, -44].forEach(y => { c.beginPath(); c.ellipse(0, y, 4.2, 2, 0, 0, 7); c.fill() }); c.fillStyle = "#ffd23f";[-1, 0, 1].forEach(s => { c.beginPath(); c.moveTo(s * 5 - 3, -58); c.lineTo(s * 7, -70); c.lineTo(s * 5 + 3, -58); c.fill() }); c.shadowColor = "#ffd23f"; c.shadowBlur = 10; c.fillStyle = "#ffc21a"; c.beginPath(); c.arc(0, -64, 6.5, 0, 7); c.fill(); c.shadowBlur = 0; c.fillStyle = `hsl(${350 + 8 * Math.sin(g.t * 4)},90%,${46 + 10 * Math.sin(g.t * 5)}%)`; c.beginPath(); c.arc(0, -64, 3.4, 0, 7); c.fill(); c.fillStyle = "#fff"; c.globalAlpha = .7; c.beginPath(); c.arc(-1.2, -65.4, 1.1, 0, 7); c.fill(); c.globalAlpha = 1; for (let i = 0; i < 3; i++) { const a = g.t * 3 + i * 2.1; star5(c, Math.cos(a) * 11, -64 + Math.sin(a) * 4, 2); c.fillStyle = i % 2 ? "#fff" : "#ffd23f"; c.fill() } c.restore() }
             const rr = g == me && ucOn ? "" : g.r; c.fillStyle = rr == "owner" ? "#ffd23f" : rr == "mod" ? "#4fc3ff" : rr == "creator" ? "#ff5c5c" : g.it ? "#ff6b6b" : "#fff"; c.font = "bold 14px sans-serif"; c.textAlign = "center"; c.fillText(g.nn ? "" : (rr == "owner" ? "[OWNER] " : rr == "mod" ? "[MOD] " : rr == "creator" ? "[CREATOR] " : "") + g.name + (g.it ? (HW ? " 🧟" : " 🔥") : ""), 0, -42); drawFx(c, g); c.restore()
         }
         function drawHands(c, g) {   // first-person cam: you only see your own arms
@@ -1633,6 +1779,45 @@
         $("bots").oninput = e => { S.bots = +e.target.value; $("bn").textContent = S.bots; save() };
         $("x").onclick = () => tog(0);
         /* ---------- REAL SERVER CLIENT (WebSocket) ---------- */
+        /* ---------- BAN STATE: red UI, length, reason, Discord report button ----------
+        Real enforcement is on the server. This only shows the player what happened (and survives reloads / offline play). */
+        let BAN = null;   // { perm, until (ms epoch, 0 = permanent), total (ms), reason }
+        const durTxt = ms => { if (!ms) return "permanent"; const m = Math.round(ms / 6e4); if (m < 60) return m + " minute" + (m == 1 ? "" : "s"); const h = Math.round(ms / 36e5); if (h < 48) return h + " hour" + (h == 1 ? "" : "s"); const d = Math.round(ms / 864e5); if (d < 60) return d % 7 == 0 ? d / 7 + " week" + (d == 7 ? "" : "s") : d + " days"; if (d < 730) { const mo = Math.round(d / 30); return mo + " month" + (mo == 1 ? "" : "s") } return Math.round(d / 365) + " years" };
+        const leftTxt = ms => { if (ms <= 0) return "0s"; const d = Math.floor(ms / 864e5), h = Math.floor(ms % 864e5 / 36e5), m = Math.floor(ms % 36e5 / 6e4), s = Math.floor(ms % 6e4 / 1e3); return d ? d + "d " + h + "h " + m + "m" : h ? h + "h " + m + "m " + s + "s" : m + "m " + s + "s" };
+        function banMarker() { let v = ""; try { v = localStorage.getItem("gt2d_bn") || "" } catch (e) { } if (!v) { const m = /(?:^|; )gt2d_bn=(\d+)/.exec(document.cookie); v = m ? m[1] : "" } if (!v) return 0; if (v === "1") return 1; return +v > Date.now() ? 1 : 0 }   // 1 = permanent marker, or a temporary one that has not run out yet
+        function banPaint() {
+            document.body.classList.toggle("banned", !!BAN); if (!BAN) return;
+            const len = BAN.perm ? "Permanent" : durTxt(BAN.total), left = BAN.perm ? "Never (permanent ban)" : leftTxt(BAN.until - Date.now()) + "  (ends " + new Date(BAN.until).toLocaleString() + ")", why = BAN.reason || "No reason recorded";
+            document.querySelectorAll(".bbox .bl").forEach(e => e.textContent = len); document.querySelectorAll(".bbox .bt").forEach(e => e.textContent = left); document.querySelectorAll(".bbox .br").forEach(e => e.textContent = why);
+            const t = $("bnrt"); if (t) t.textContent = "⛔ BANNED " + (BAN.perm ? "PERMANENTLY" : "for " + len + " - " + leftTxt(BAN.until - Date.now()) + " left") + " - " + why
+        }
+        function banSet(d) {
+            const now = Date.now(), perm = d.perm ? 1 : 0, until = perm ? 0 : now + (+d.left || 0);
+            BAN = { perm, until, total: perm ? 0 : (+d.total || 0), reason: String(d.reason || "").slice(0, 100) };
+            try { localStorage.setItem("gt2d_bn", perm ? "1" : String(until)); localStorage.setItem("gt2d_binfo", JSON.stringify(BAN)) } catch (e) { }
+            document.cookie = "gt2d_bn=" + (perm ? "1" : until) + ";max-age=" + (perm ? 315360000 : Math.max(60, Math.ceil((until - now) / 1000))) + ";path=/;SameSite=Lax"; banPaint()
+        }
+        function banClear() { BAN = null; try { localStorage.removeItem("gt2d_bn"); localStorage.removeItem("gt2d_binfo") } catch (e) { } document.cookie = "gt2d_bn=;max-age=0;path=/"; banPaint() }
+        const BANBOX = '<div class="bbox"><b>⛔ YOU ARE BANNED</b><br>Length: <b class="bl"></b><br>Time left: <b class="bt"></b><br>Reason: <b class="br"></b><br>If you think this was a mistake, you can report it in our Discord and staff will look at it.<button class="bdc">💬 Report a false ban on Discord</button></div>';
+        ["p", "pl", "pf", "sv", "cr"].forEach(id => { const el = $(id), tb = el && el.querySelector(".tb"); if (tb) tb.insertAdjacentHTML("afterend", BANBOX) });
+        document.addEventListener("click", e => { if (e.target.closest && e.target.closest(".bdc")) $("dc").onclick() });
+        try { const j = JSON.parse(localStorage.getItem("gt2d_binfo") || "null"); if (j && (j.perm || +j.until > Date.now())) BAN = { perm: j.perm ? 1 : 0, until: +j.until || 0, total: +j.total || 0, reason: String(j.reason || "").slice(0, 100) }; else if (j) banClear() } catch (e) { } banPaint();
+        setInterval(() => { if (!BAN) return; if (!BAN.perm && Date.now() >= BAN.until) { banClear(); say("Your ban has ended - you can play online again"); return } banPaint() }, 1000);
+
+        /* ---------- OWNER: ban picker (length + reason) ---------- */
+        const BAN_PRESETS = [["1 hour", 3600], ["1 day", 86400], ["3 days", 259200], ["1 week", 604800], ["2 weeks", 1209600], ["4 weeks", 2419200], ["3 months", 7776000], ["6 months", 15552000], ["1 year", 31536000], ["Permanent", 0]];
+        let bdTo = "", bdSec = 604800;
+        const bdCustom = () => { const m = /^\s*(\d{1,4})\s*(mo|m|h|d|w|y)\s*$/i.exec($("bdc").value); if (!m) return null; const u = { m: 60, h: 3600, d: 86400, w: 604800, mo: 2592000, y: 31536000 }[m[2].toLowerCase()], v = +m[1] * u; return v > 0 && v <= 315360000 ? v : null };
+        function bdR() {
+            const cu = $("bdc").value.trim() ? bdCustom() : undefined, sec = cu === undefined ? bdSec : cu;
+            $("bdl").innerHTML = BAN_PRESETS.map(([n, v]) => `<button class="red${cu === undefined && bdSec == v ? " on" : ""}" data-bp="${v}">${n}</button>`).join("");
+            $("bds").textContent = sec === null ? "Custom length not understood (use e.g. 10d, 6h, 2w, 3mo, 1y)" : "Ban length: " + (sec ? durTxt(sec * 1000) : "PERMANENT"); $("bdok").disabled = sec === null
+        }
+        function openBan(id, name) { if (ST != "owner") return; bdTo = id; bdSec = 604800; $("bdc").value = ""; $("bdr").value = ""; $("bdn").innerHTML = "Ban <b>" + esc(name || "player") + "</b>?"; $("bd").hidden = false; bdR() }
+        $("bdl").onclick = e => { const v = e.target.dataset && e.target.dataset.bp; if (v == null) return; bdSec = +v; $("bdc").value = ""; bdR() };
+        $("bdc").oninput = bdR; $("bdx").onclick = $("bdno").onclick = () => { $("bd").hidden = true };
+        $("bdok").onclick = () => { const cu = $("bdc").value.trim() ? bdCustom() : undefined, sec = cu === undefined ? bdSec : cu; if (sec === null || ST != "owner") return; cmd("ban", bdTo, $("bdr").value.trim().slice(0, 100) || "No reason given", "", 0, sec); snd(600, .1); say("Banned " + ((OG[bdTo] || {}).name || "player") + " (" + (sec ? durTxt(sec * 1000) : "permanent") + ")"); $("bd").hidden = true; closePf() };
+
         function net() {
             vcReset(); try { pPush() } catch (e) { } PJ = 0; if (WS) { try { WS.close() } catch (e) { } WS = null } RM = null; OG = {}; myId = null; OPS = null; ST = ""; CR = 0; kd = 0; if (me) me.r = ""; if (!S.online) return;
             const off = t => { say(t); S.online = 0; save(); load(M.n) };
@@ -1641,7 +1826,7 @@
             const n = M.n; let ok = 0, w, lt = 0;
             try { w = new WebSocket(/^wss?:\/\//.test(host) ? host : (location.protocol == "https:" ? "wss" : "ws") + "://" + host) } catch (e) { return off("Could not connect - playing offline") }
             WS = w;
-            w.onopen = () => w.send(JSON.stringify({ t: "join", uid: UID, room: (S.code || "public") + "-" + n, bn: (() => { try { return localStorage.getItem("gt2d_bn") || /(?:^|; )gt2d_bn=1/.test(document.cookie) ? 1 : 0 } catch (e) { return 0 } })() }));
+            w.onopen = () => w.send(JSON.stringify({ t: "join", uid: UID, room: (S.code || "public") + "-" + n, bn: banMarker() }));
             w.onmessage = e => {
                 let d; try { d = JSON.parse(e.data) } catch (x) { return } if (M.n != n || WS != w) return;
                 if (d.t == "hi") { myId = d.id; ST = d.r == "owner" || d.r == "mod" ? d.r : ""; CR = d.r == "creator" ? 1 : 0; me.r = ST || (CR ? "creator" : ""); ok = 1; rd = { st: "wait", t: 4 }; if (ST && ucOn) setTimeout(() => cmd("undercover", "", "", "", 1), 250); RM = { presence(s) { const t = performance.now(); if (t - lt < 45 || w.readyState != 1) return; lt = t; w.send(JSON.stringify({ t: "s", d: s })) } } }
@@ -1691,8 +1876,8 @@
             if (d.k == "denied") { kd = 1; say("The staff room is staff only"); setTimeout(() => load("lobby"), 800); return }
             if (d.k == "kicked") { kd = 1; say("You were removed by staff"); return }
             if (d.k == "guard") { kd = 1; say(String(d.txt || "Removed by the anti-cheat").slice(0, 80)); return }
-            if (d.k == "banned") { kd = 1; S.online = 0; save(); try { localStorage.setItem("gt2d_bn", "1") } catch (e) { } document.cookie = "gt2d_bn=1;max-age=315360000;path=/;SameSite=Lax"; say("You are banned from online play"); return }
-            if (d.k == "unmark") { try { localStorage.removeItem("gt2d_bn") } catch (e) { } document.cookie = "gt2d_bn=;max-age=0;path=/"; return }
+            if (d.k == "banned") { kd = 1; S.online = 0; save(); banSet(d); say(d.perm ? "You are permanently banned from online play" : "You are banned from online play"); return }
+            if (d.k == "unmark") { banClear(); return }
             if (d.k == "infect") { if (d.id == myId) { snd(150, .2); say("You got infected!") } if (d.by == myId) { S.coins += 5; save(); snd(700, .2); say("Tagged " + d.n + "! +5 coins") } }
             else if (d.k == "start") say(d.pick == myId ? "YOU are IT! Tag everyone!" : "Infection started! RUN!");
             else if (d.k == "end") { if (d.last == myId) { S.coins += 25; save(); say("You survived longest! +25 coins") } else say("Round over!") }
@@ -1861,7 +2046,7 @@ Click a player (or press Tab) for their card: Mute / Report / Check. Staff mutes
         $("pf").onclick = e => {
             const t = e.target, d = t.dataset, g = pfg; if (t.id == "pfx") return closePf(); if (!g) return;
             if (d.why) { pfWhy = d.why; pfR(); return }
-            if (d.st) { cmd(d.st, g.id); snd(600, .1); if (d.st == "kick" || d.st == "ban") closePf(); else setTimeout(pfR, 350); return }
+            if (d.st == "ban") { openBan(g.id, g.name); return } if (d.st) { cmd(d.st, g.id); snd(600, .1); if (d.st == "kick" || d.st == "ban") closePf(); else setTimeout(pfR, 350); return }
             if (d.a == "mute") { if (g.net) { if (!g.k) return; if (S.mu[g.k]) delete S.mu[g.k]; else S.mu[g.k] = g.name; save() } else g.lm = !g.lm; say(((g.net ? S.mu[g.k] : g.lm) ? "Muted " : "Unmuted ") + g.name); pfR() }
             else if (d.a == "rep") { if (!(WS && WS.readyState == 1)) { say("Reports need Online mode"); return } pfRep = 1; pfChk = null; pfR() }
             else if (d.a == "canr") { pfRep = 0; pfR() }
@@ -1924,7 +2109,7 @@ Click a player (or press Tab) for their card: Mute / Report / Check. Staff mutes
         const nearV = () => M.V && me.x > M.V.x - 60 && me.x < M.V.x + M.V.w + 60 && me.y > M.V.y - 80 && me.y < M.V.y + M.V.h + 80;
         function useVent() { snd(200, .15, "sawtooth"); if (ST) { svT(0); load("staff") } else say(WS && RM ? "ACCESS DENIED - staff only" : "The staff room only works in Online mode") }
         function svT(v) { sop = v; $("sv").hidden = !v; if (v) { rsv.last = ""; rsv() } }
-        function cmd(k, to, txt, item, on) { if ((ST || CR) && WS && WS.readyState == 1) WS.send(JSON.stringify({ t: "cmd", k, to, txt, item, on })) }
+        function cmd(k, to, txt, item, on, dur) { if ((ST || CR) && WS && WS.readyState == 1) WS.send(JSON.stringify({ t: "cmd", k, to, txt, item, on, dur })) }
         const FXB = [["launch", "Launch"], ["rocket", "Rocket"], ["freeze", "Freeze"], ["invert", "Invert"], ["lowgrav", "Low-G"], ["slow", "Slow"], ["home", "Respawn"], ["goto", "Bring"]];
         function rsv() {
             if (!ST) { $("sv").hidden = true; sop = 0; return }
@@ -2009,7 +2194,7 @@ Click a player (or press Tab) for their card: Mute / Report / Check. Staff mutes
             else if (d.s) { if (d.s == "uc") ucToggle(); else if (ST == "owner") { if (d.s == "fly") { flyOn = !flyOn; me.vx = me.vy = 0; say(flyOn ? "Fly ON" : "Fly OFF") } else if (d.s == "coins") { S.coins += 1000; save(); say("+1000 coins") } else if (d.s == "admin") { cmd("adminlink"); say("Opening the admin dashboard...") } } rsv.last = ""; rsv() }
             else if (d.o) { if (ST == "owner") selfFx(d.o); rsv.last = ""; rsv() }
             else if (d.sn) { const [a, v] = d.sn.split("|"); if (a == "post") { const el = $("sn"), t = (el.value || "").trim(); if (t) { cmd("snote", "", t); el.value = "" } } else if (ST == "owner") cmd(a == "clear" ? "snoteclear" : "snotedel", "", v || ""); snd(600, .1) }
-            else if (d.x) { const [k, to] = d.x.split("|"); if (k == "announce") { const t = ($("ann").value || "").trim(); if (t) { cmd("announce", "", t); $("ann").value = "" } } else cmd(k, to); snd(600, .1) }
+            else if (d.x) { const [k, to] = d.x.split("|"); if (k == "ban") { openBan(to, (OG[to] || {}).name); return } if (k == "announce") { const t = ($("ann").value || "").trim(); if (t) { cmd("announce", "", t); $("ann").value = "" } } else cmd(k, to); snd(600, .1) }
         };
         setInterval(() => { if (!$("sv").hidden && ["players", "give", "ops", "board"].includes(svTab) && document.activeElement.id != "sn") rsv() }, 1500);
         $("uidb").onclick = () => { uidShow = !uidShow; ren() };
