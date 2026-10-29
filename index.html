@@ -2,7 +2,7 @@
 <html>
 <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+    <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
     <title>goril</title>
     <style>
         html, body {
@@ -676,10 +676,50 @@
                 background: #ffd23f
             }
     </style>
+    <style>
+        /* ===== MOBILE / TOUCH ===== */
+        html, body { overscroll-behavior: none; -webkit-tap-highlight-color: transparent }
+        canvas { touch-action: none }
+        #tc, #rot { display: none }
+        body.touch #tc { display: block }
+        body.touch { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none }
+        body.touch input { -webkit-user-select: text; user-select: text }
+        .tbtn { position: fixed; z-index: 5; box-sizing: border-box; display: flex; align-items: center; justify-content: space-around; background: rgba(243,233,210,.78); color: #3a2a1c; border: 3px solid #3a2a1c; box-shadow: 3px 3px 0 #3a2a1c; font: bold 26px "Courier New",monospace; touch-action: none; -webkit-user-select: none; user-select: none; cursor: pointer }
+        .tbtn.dn, .tbtn .dn { background: #ffd23f }
+        .tbtn small { display: block; font-size: 11px; letter-spacing: 1px }
+        #tdp { left: calc(14px + env(safe-area-inset-left, 0px)); bottom: calc(16px + env(safe-area-inset-bottom, 0px)); width: 210px; height: 92px; border-radius: 46px }
+        #tdp span { flex: 1; height: 100%; display: flex; align-items: center; justify-content: center; border-radius: 46px }
+        #tjp { right: calc(14px + env(safe-area-inset-right, 0px)); bottom: calc(16px + env(safe-area-inset-bottom, 0px)); width: 104px; height: 104px; border-radius: 50%; flex-direction: column; justify-content: center; font-size: 30px }
+        #tbr, #tue { width: 66px; height: 66px; border-radius: 50%; right: calc(130px + env(safe-area-inset-right, 0px)) }
+        #tbr { bottom: calc(14px + env(safe-area-inset-bottom, 0px)) }
+        #tue { bottom: calc(88px + env(safe-area-inset-bottom, 0px)) }
+        #trs { width: 48px; height: 48px; border-radius: 50%; font-size: 18px; right: calc(24px + env(safe-area-inset-right, 0px)); bottom: calc(132px + env(safe-area-inset-bottom, 0px)) }
+        #tvt { display: none; width: 66px; height: 66px; border-radius: 50%; font-size: 24px; left: calc(14px + env(safe-area-inset-left, 0px)); bottom: calc(118px + env(safe-area-inset-bottom, 0px)) }
+        body.touch.vact #tvt { display: flex }
+        body.touch #bar { top: calc(8px + env(safe-area-inset-top, 0px)); bottom: auto; right: calc(8px + env(safe-area-inset-right, 0px)); gap: 5px }
+        body.touch #bar .fb { font-size: 12px; padding: 7px 9px; box-shadow: 2px 2px 0 #3a2a1c }
+        body.touch #ch { bottom: auto; top: calc(56px + env(safe-area-inset-top, 0px)) }
+        body.touch button { min-height: 34px }
+        body.touch .bd { -webkit-overflow-scrolling: touch; touch-action: pan-y }
+        body.touch .pnl, body.touch #p, body.touch #sv, body.touch #cr { max-height: calc(100% - 12px) }
+        #fsb { display: none }
+        body.touch.fsok #fsb { display: inline-block }
+        #rot { position: fixed; inset: 0; z-index: 2147482000; background: #111; color: #fff; font: bold 20px "Courier New",monospace; text-align: center; padding: 30px; align-items: center; justify-content: center }
+        @media (orientation: portrait) and (max-width: 700px) { body.touch #rot { display: flex } }
+    </style>
 </head>
 <body>
     <canvas id="c"></canvas>
-    <div id="bar"><button class="fb" id="cb">💬 Chat (Enter)</button><button class="fb" id="vb">🎤 Voice: off (V)</button><button class="fb" id="pb">👥 Players (Tab)</button><button class="fb" id="mb">☰ Menu (M)</button><button class="fb" id="sb" hidden>🛡 Staff (Q)</button></div>
+    <div id="bar"><button class="fb" id="cb">💬 Chat (Enter)</button><button class="fb" id="vb">🎤 Voice: off (V)</button><button class="fb" id="pb">👥 Players (Tab)</button><button class="fb" id="mb">☰ Menu (M)</button><button class="fb" id="fsb">⛶</button><button class="fb" id="sb" hidden>🛡 Staff (Q)</button></div>
+    <div id="tc">
+        <div id="tdp" class="tbtn"><span id="tl">◀</span><span id="tr">▶</span></div>
+        <div id="tjp" class="tbtn">▲<small>JUMP</small></div>
+        <div id="tbr" class="tbtn">▼</div>
+        <div id="tue" class="tbtn">E</div>
+        <div id="trs" class="tbtn">R</div>
+        <div id="tvt" class="tbtn">🎤</div>
+    </div>
+    <div id="rot">📱 ↻<br><br>Rotate your phone sideways to play</div>
     <div id="tut" hidden style="position:fixed;right:12px;top:118px;width:min(300px,44%);font-size:13px;opacity:.95;box-sizing:border-box;background:#f3e9d2;color:#3a2a1c;font-family:Courier New,monospace;border:3px solid #3a2a1c;box-shadow:4px 4px 0 #3a2a1c;padding:14px;z-index:5"><b>Tutorial <span id="tn"></span></b><p id="tt" style="margin:8px 0"></p><button id="tnx">Next</button><button id="tsk">Skip</button></div>
     <div id="ch" hidden><input type="text" id="ci" maxlength="120" placeholder="Say something...  (Enter = send, Esc = close)" autocomplete="off"><button id="cs">Send</button></div>
     <div id="bnr"><span id="bnrt"></span><button class="bdc">💬 Report a false ban on Discord</button></div>
@@ -752,7 +792,8 @@
     </div>
     <script>
         const cv = document.getElementById("c"), cx = cv.getContext("2d"), $ = i => document.getElementById(i);
-        let W0, H0, Z, ZB; function rs() { cv.width = W0 = innerWidth; cv.height = H0 = innerHeight; Z = ZB = H0 / 820 } onresize = rs; rs();
+        let TOUCH = (() => { try { return matchMedia("(pointer: coarse)").matches && !matchMedia("(any-pointer: fine)").matches } catch (e) { return false } })();   // phones / tablets without a mouse; also switched on by the first real touch
+        let W0, H0, Z, ZB; function rs() { cv.width = W0 = innerWidth; cv.height = H0 = innerHeight; Z = ZB = H0 / (TOUCH ? 640 : 820) } onresize = rs; rs();
         let S = { name: "goril", hue: 25, coins: 60, own: {}, eq: { hat: "none", face: "none", back: "none", trail: "none", hand: "none" }, bots: 6, candy: 0 };
         try { Object.assign(S, JSON.parse(localStorage.getItem("gt2d"))) } catch (e) { }
         S.eq = Object.assign({ hat: "none", face: "none", back: "none", trail: "none", hand: "none" }, S.eq);
@@ -1574,7 +1615,8 @@
         }
         /* ---------- TUTORIAL ---------- */
         const TS = ["Welcome to goril! You move with your ARMS - your hands push you off any surface.", "Hold A or D to swing your arms and run. Try it now!", "Hold W or Space to slam your hands down and jump. Hold W against a wall, tree or ladder to climb it - trees and ladders are only solid while you hold W!", "S plants your hands to brake. E uses portals and buys items, M opens the menu, R respawns (lobby only), L goes to the lobby, H shows this help again.", "Chat: press Enter or T to type. Voice: pick Push-to-talk or Open mic in the menu (Online only) - you hear players near you. Click a player (or press Tab) to mute, report or check them.", "DESERT: cracks in the sand drop you into the canyons below - climb out of any crack. In water hold W to swim up, S to dive. Orange dust devils lift you into the air!", "Press M for the menu (name, color, online mode). Buy cosmetics in the Shop portal in the lobby. Have fun!"];
-        if (HW) TS.splice(4, 0, "HALLOWEEN: collect candy 🍬 on every map (+1 coin each). Mystery pumpkins give a random TRICK or TREAT. Reach 30 / 60 / 100 candy to unlock exclusive cosmetics in the Shop!"); let ti = -1; function tut(i) { ti = i; const t = $("tut"); if (i < 0 || i >= TS.length) { t.hidden = true; ti = -1; S.tut = 1; save(); return } t.hidden = false; $("tt").textContent = TS[i]; $("tn").textContent = (i + 1) + "/" + TS.length }
+        if (HW) TS.splice(4, 0, "HALLOWEEN: collect candy 🍬 on every map (+1 coin each). Mystery pumpkins give a random TRICK or TREAT. Reach 30 / 60 / 100 candy to unlock exclusive cosmetics in the Shop!"); const tutT = x => [["Hold A or D", "Hold ◀ or ▶"], ["Hold W or Space", "Hold ▲"], ["Hold W ", "Hold ▲ "], ["while you hold W!", "while you hold ▲!"], ["S plants your hands to brake. E uses portals and buys items, M opens the menu, R respawns (lobby only), L goes to the lobby, H shows this help again.", "▼ plants your hands to brake. The E button uses portals and buys items, ☰ Menu opens the menu, R respawns (lobby only)."], ["press Enter or T to type", "tap 💬 Chat to type"], ["Click a player (or press Tab)", "Tap a player (or 👥 Players)"], ["hold W to swim up, S to dive", "hold ▲ to swim up, ▼ to dive"], ["Press M for the menu", "Tap ☰ Menu for the menu"]].reduce((a, [f, r]) => a.split(f).join(r), x);
+        let ti = -1; function tut(i) { ti = i; const t = $("tut"); if (i < 0 || i >= TS.length) { t.hidden = true; ti = -1; S.tut = 1; save(); return } t.hidden = false; $("tt").textContent = TOUCH ? tutT(TS[i]) : TS[i]; $("tn").textContent = (i + 1) + "/" + TS.length }
         /* ---------- DRAWING ---------- */
         const COL = { f: null, w: "#1a1a28", d: "#7b5a3a", s: "#8a6a4a", p: "#6c7a89", t: "#5a3b22", br: "#6b4526", l: "#6b4526" };
         function dRock(b) {   // desert sandstone: strata bands, sunny top edge, dark side edges
@@ -1747,10 +1789,10 @@
             if (HW) hwFront(); if (cleanOn) return requestAnimationFrame(frame); drawChat(c); hudV(c); c.fillStyle = "#fff"; c.font = "bold 17px sans-serif"; c.textAlign = "left"; c.fillText("🪙 " + S.coins + (HW ? "   🍬 " + (S.candy | 0) + (M.cy && M.cy.length ? " (" + M.cy.filter(q => !q.g).length + " here)" : "") : "") + "   📍 " + M.n.toUpperCase() + "   " + (me.it ? "🔥 YOU ARE IT" : "") + (RM ? "   🌐 " + (S.code || "public") + " (" + (Object.keys(OG).length + 1) + " players)" : S.online ? "   🌐 connecting..." : ""), 16, 28);
             c.textAlign = "center"; c.font = "bold 20px sans-serif";
             if (!M.nr) { const inf = G.filter(g => g.it).length; c.fillText(RM && G.length < 2 ? "Waiting for other players... (share your room code)" : rd.st == "wait" ? "Infection in " + Math.ceil(rd.t) : rd.st == "end" ? "Round over" : "Time " + (rd.t | 0) + "s   Infected " + inf + "/" + G.length, W0 / 2, 28) }
-            if (!M.nr) { const mw = 180, mh = mw * M.H / M.W, mx = 12, my = H0 - mh - 36; c.fillStyle = "#0008"; c.fillRect(mx, my, mw, mh); R.forEach(b => { if (b.k != "w") { c.fillStyle = "#889"; c.fillRect(mx + b.x / M.W * mw, my + b.y / M.H * mh, Math.max(1, b.w / M.W * mw), Math.max(1, b.h / M.H * mh)) } }); G.forEach(g => { c.fillStyle = g == me ? "#4f4" : g.it ? "#f44" : "#fff"; c.fillRect(mx + g.x / M.W * mw - 2, my + g.y / M.H * mh - 2, 4, 4) }); c.textAlign = "right"; c.font = "14px sans-serif"; c.fillStyle = "#fff";[...G].sort((a, b) => (b.tg || 0) - (a.tg || 0)).slice(0, 4).forEach((g, i) => c.fillText(g.name + " " + (g.tg || 0) + " tags", W0 - 12, 28 + i * 18)); c.textAlign = "center" }
+            if (!M.nr) { const mw = TOUCH ? 120 : 180, mh = mw * M.H / M.W, mx = 12, my = TOUCH ? 10 : H0 - mh - 36; c.fillStyle = "#0008"; c.fillRect(mx, my, mw, mh); R.forEach(b => { if (b.k != "w") { c.fillStyle = "#889"; c.fillRect(mx + b.x / M.W * mw, my + b.y / M.H * mh, Math.max(1, b.w / M.W * mw), Math.max(1, b.h / M.H * mh)) } }); G.forEach(g => { c.fillStyle = g == me ? "#4f4" : g.it ? "#f44" : "#fff"; c.fillRect(mx + g.x / M.W * mw - 2, my + g.y / M.H * mh - 2, 4, 4) }); c.textAlign = "right"; c.font = "14px sans-serif"; c.fillStyle = "#fff";[...G].sort((a, b) => (b.tg || 0) - (a.tg || 0)).slice(0, 4).forEach((g, i) => c.fillText(g.name + " " + (g.tg || 0) + " tags", W0 - 12, 28 + i * 18)); c.textAlign = "center" }
             if (M.n == "shop") { c.textAlign = "right"; c.font = "bold 32px sans-serif"; c.fillStyle = "#ffd23f"; c.fillText("🪙 " + S.coins, W0 - 16, 44); c.textAlign = "center" }
             if (msgT > 0) { c.font = "bold 26px sans-serif"; c.globalAlpha = Math.min(1, msgT); c.fillStyle = "#ffe97a"; c.fillText(msg, W0 / 2, 80); c.globalAlpha = 1 }
-            c.font = "13px sans-serif"; c.fillStyle = "#fff8"; c.fillText("H = help" + (ucOn ? "   🕶 UNDERCOVER" : ST ? "   Q = staff menu   U = undercover" : "") + (flyOn && ST == "owner" ? "   ✈ FLY ON" : ""), W0 / 2, H0 - 12);
+            c.font = "13px sans-serif"; c.fillStyle = "#fff8"; if (!TOUCH) c.fillText("H = help" + (ucOn ? "   🕶 UNDERCOVER" : ST ? "   Q = staff menu   U = undercover" : "") + (flyOn && ST == "owner" ? "   ✈ FLY ON" : ""), W0 / 2, H0 - 12);
             requestAnimationFrame(frame)
         }
         /* ---------- INPUT & UI ---------- */
@@ -1998,7 +2040,7 @@ Click a player (or press Tab) for their card: Mute / Report / Check. Staff mutes
         }
         function vbUpd() {
             const t = !S.vm ? "🎤 Voice: off (V)" : S.vm == 1 ? "🎤 Push-to-talk (hold V)" : selfMute ? "🔇 Mic muted (V)" : "🎤 Open mic (V)";
-            if ($("vb").textContent != t) $("vb").textContent = t; $("vb").classList.toggle("on", !!S.vm);[0, 1, 2].forEach(i => $("vm" + i).className = S.vm == i ? "on" : "")
+            const t2 = TOUCH ? t.replace(/\s*\((?:hold )?V\)/, "") : t; if ($("vb").textContent != t2) $("vb").textContent = t2; document.body.classList.toggle("vact", !!S.vm); $("vb").classList.toggle("on", !!S.vm);[0, 1, 2].forEach(i => $("vm" + i).className = S.vm == i ? "on" : "")
         }
         async function setVm(v) {
             v = ((v % 3) + 3) % 3;
@@ -2226,6 +2268,33 @@ Click a player (or press Tab) for their card: Mute / Report / Check. Staff mutes
             if (d.t) { const n = performance.now(); if (n - crLast < 900) return; crLast = n; const [k, id] = d.t.split("|"); cmd(k, id); snd(500, .1) }
         };
         $("crz").oninput = e => { crZoom = +e.target.value / 100; $("crzn").textContent = e.target.value };
+        /* ---------- TOUCH CONTROLS: the buttons just press the same keys as the keyboard, so everything else works unchanged ---------- */
+        const tkey = (k, dn) => { try { dispatchEvent(new KeyboardEvent(dn ? "keydown" : "keyup", { key: k, bubbles: true })) } catch (e) { } };
+        function setTouch(v) {
+            v = !!v; if (v == TOUCH && document.body.classList.contains("touch") == v) return; TOUCH = v; document.body.classList.toggle("touch", v); rs(); vbUpd();
+            ["cb", "pb", "mb", "sb"].forEach(id => { const b = $(id); if (b && v) b.textContent = b.textContent.replace(/\s*\([^)]*\)/, "") }); if (!v) dpSet("")
+        }
+        function holdBtn(el, key) {
+            const ds = new Set();
+            el.addEventListener("pointerdown", e => { e.preventDefault(); try { el.setPointerCapture(e.pointerId) } catch (x) { } if (!ds.size) { tkey(key, 1); el.classList.add("dn") } ds.add(e.pointerId) });
+            const up = e => { if (!ds.delete(e.pointerId)) return; if (!ds.size) { tkey(key, 0); el.classList.remove("dn") } };
+            el.addEventListener("pointerup", up); el.addEventListener("pointercancel", up); el.addEventListener("lostpointercapture", up)
+        }
+        let dpD = "", dpId = null; const dp = $("tdp");
+        function dpSet(d) { if (d == dpD) return; if (dpD) tkey(dpD, 0); dpD = d; if (d) tkey(d, 1); $("tl").classList.toggle("dn", d == "a"); $("tr").classList.toggle("dn", d == "d") }
+        const dpPos = e => { const r = dp.getBoundingClientRect(); dpSet((e.clientX - r.left) / r.width < .5 ? "a" : "d") };
+        dp.addEventListener("pointerdown", e => { e.preventDefault(); dpId = e.pointerId; try { dp.setPointerCapture(e.pointerId) } catch (x) { } dpPos(e) });
+        dp.addEventListener("pointermove", e => { if (e.pointerId == dpId) dpPos(e) });
+        const dpUp = e => { if (e.pointerId == dpId) { dpId = null; dpSet("") } };
+        dp.addEventListener("pointerup", dpUp); dp.addEventListener("pointercancel", dpUp); dp.addEventListener("lostpointercapture", dpUp);
+        holdBtn($("tjp"), "w"); holdBtn($("tbr"), "s"); holdBtn($("tue"), "e"); holdBtn($("trs"), "r"); holdBtn($("tvt"), "v");
+        addEventListener("pointerdown", e => { if (e.pointerType == "touch") { setTouch(true); try { AC = AC || new AudioContext(); if (AC.state == "suspended") AC.resume() } catch (x) { } } }, true);
+        addEventListener("keydown", e => { if (e.isTrusted && TOUCH && !matchMedia("(pointer: coarse)").matches) setTouch(false) }, true);   // a real keyboard on a touch laptop hides the pad
+        addEventListener("gesturestart", e => e.preventDefault());
+        try { if (document.fullscreenEnabled || document.webkitFullscreenEnabled) document.body.classList.add("fsok") } catch (e) { }
+        $("fsb").onclick = () => { try { const d = document, el = d.documentElement; if (d.fullscreenElement || d.webkitFullscreenElement) (d.exitFullscreen || d.webkitExitFullscreen).call(d); else (el.requestFullscreen || el.webkitRequestFullscreen).call(el) } catch (e) { say("Fullscreen is not available here") } };
+        if (TOUCH) { TOUCH = false; setTouch(true) }
+
         const DISCORD_URL = "https://discord.gg/t42CN29rV7";   // <- put your Discord invite link here
         $("dc").onclick = () => { try { if (typeof window.GORIL_OPEN == "function") window.GORIL_OPEN(DISCORD_URL); else window.open(DISCORD_URL, "_blank", "noopener") } catch (e) { say("Could not open the browser") } };
         $("cm").onclick = () => { if (!(WS && WS.readyState == 1)) return say("Call a mod needs Online mode"); wsend({ t: "callmod" }); tog(0) };
