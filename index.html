@@ -2041,7 +2041,7 @@ Click a player (or press Tab) for their card: Mute / Report / Check. Staff mutes
             if (d.t) { const n = performance.now(); if (n - crLast < 900) return; crLast = n; const [k, id] = d.t.split("|"); cmd(k, id); snd(500, .1) }
         };
         $("crz").oninput = e => { crZoom = +e.target.value / 100; $("crzn").textContent = e.target.value };
-        const DISCORD_URL = "https://discord.gg/YOUR-INVITE";   // <- put your Discord invite link here
+        const DISCORD_URL = "https://discord.gg/t42CN29rV7";   // <- put your Discord invite link here
         $("dc").onclick = () => { try { if (typeof window.GORIL_OPEN == "function") window.GORIL_OPEN(DISCORD_URL); else window.open(DISCORD_URL, "_blank", "noopener") } catch (e) { say("Could not open the browser") } };
         $("cm").onclick = () => { if (!(WS && WS.readyState == 1)) return say("Call a mod needs Online mode"); wsend({ t: "callmod" }); tog(0) };
         $("hp").onclick = () => { tog(0); tut(0) }; document.addEventListener("visibilitychange", () => { if (!document.hidden && S.online && !WS) net() });
