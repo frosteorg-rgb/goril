@@ -910,6 +910,9 @@
             <div id="botsrow">Bots: <b id="bn"></b><input type="range" id="bots" min="1" max="12"></div>
             <div class="sec">TRAVEL</div>
             <div><button data-m="lobby">Lobby</button><button data-m="shop">Shop</button><button data-m="forest">Forest</button><button data-m="city">City</button><button data-m="sky">Sky</button><button data-m="desert">Desert</button><button data-m="staff" id="mst" hidden>Staff Room</button></div>
+            <div class="sec">VR / 3D</div>
+            <div><button id="vrb">🥽 Enter VR (headset)</button><button id="v3b">🖥 3D view (no headset)</button></div>
+            <small id="vrs"></small>
             <div class="sec">VOICE</div>
             <div><button id="vm0">Off</button><button id="vm1">Push-to-talk</button><button id="vm2">Open mic</button></div>
             <div class="row" style="margin-top:6px"><span>Volume <b id="vvn"></b>%</span><span>Muted: <b id="mun">0</b> <button id="umall">Clear</button></span></div>
@@ -941,6 +944,504 @@
             <h4>TROLL</h4><div id="crt"></div>
         </div>
     </div>
+    <script>
+/* ===================== goril VR / 3D MODE =====================
+   A real-3D view of the game (WebGL2) with WebXR for headsets (SteamVR, Virtual Desktop, Quest Link, Oculus PC...).
+   The 2D game stays the ONE simulation (physics, bots, multiplayer, anti-cheat are all untouched). This module only
+   draws that world in 3D and turns controller input into the same keys the keyboard uses.
+   No external libraries: the server CSP blocks CDNs, so the renderer is plain WebGL2.
+   Open the menu (M) -> VR section. WebXR needs https or http://localhost. */
+const VR = (() => {
+    "use strict";
+    const D = document, el = id => D.getElementById(id);
+    const V = { on: 0, xr: 0, cc: null, SC: 0.03, vig: 1, menu: 0, sup: null, onLoad() { }, render() { } };
+    const DZ = 240;   // half depth of the world slab (game pixels)
+    let gl, prog, U = {}, cv, MESH = {}, WORLD = null, BD = null, sess = null, ref = null, layer = null, pbuf = null, pvao = null, whiteTex = null;
+    let hud = null, toast = null, menuT = null, vigT = null, tagC = new Map(), cosC = new Map(), rgbC = new Map(), hudNext = 0, hudKey = "";
+    const cam = { yaw: 0.35, pit: 0.22, dist: 14 };
+    const st = { yaw: 0, p0: null, vg: 0, lt: 0, errs: 0, Rg: null, ctl: [], pb: {}, ks: {}, sign: 0, base: 1, hover: -1, mp: null, hap: 0 };
+
+    /* ---------------- math (column-major) ---------------- */
+    const I4 = () => new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+    const bas = (px, py, pz, ax, ay, az, bx, by, bz, cx, cy, cz) => new Float32Array([ax, ay, az, 0, bx, by, bz, 0, cx, cy, cz, 0, px, py, pz, 1]);
+    const tsr = (px, py, pz, sx, sy, sz) => bas(px, py, pz, sx, 0, 0, 0, sy, 0, 0, 0, sz);
+    const rotYm = (a, px, py, pz) => { const c = Math.cos(a), s = Math.sin(a); return bas(px, py, pz, c, 0, -s, 0, 1, 0, s, 0, c) };
+    function mul(a, b) { const o = new Float32Array(16); for (let c = 0; c < 4; c++) for (let r = 0; r < 4; r++) { let s = 0; for (let k = 0; k < 4; k++) s += a[k * 4 + r] * b[c * 4 + k]; o[c * 4 + r] = s } return o }
+    function inv(a) {
+        const a00 = a[0], a01 = a[1], a02 = a[2], a03 = a[3], a10 = a[4], a11 = a[5], a12 = a[6], a13 = a[7], a20 = a[8], a21 = a[9], a22 = a[10], a23 = a[11], a30 = a[12], a31 = a[13], a32 = a[14], a33 = a[15];
+        const b00 = a00 * a11 - a01 * a10, b01 = a00 * a12 - a02 * a10, b02 = a00 * a13 - a03 * a10, b03 = a01 * a12 - a02 * a11, b04 = a01 * a13 - a03 * a11, b05 = a02 * a13 - a03 * a12;
+        const b06 = a20 * a31 - a21 * a30, b07 = a20 * a32 - a22 * a30, b08 = a20 * a33 - a23 * a30, b09 = a21 * a32 - a22 * a31, b10 = a21 * a33 - a23 * a31, b11 = a22 * a33 - a23 * a32;
+        let d = b00 * b11 - b01 * b10 + b02 * b09 + b03 * b08 - b04 * b07 + b05 * b06; if (!d) return I4(); d = 1 / d;
+        return new Float32Array([(a11 * b11 - a12 * b10 + a13 * b09) * d, (a02 * b10 - a01 * b11 - a03 * b09) * d, (a31 * b05 - a32 * b04 + a33 * b03) * d, (a22 * b04 - a21 * b05 - a23 * b03) * d,
+        (a12 * b08 - a10 * b11 - a13 * b07) * d, (a00 * b11 - a02 * b08 + a03 * b07) * d, (a32 * b02 - a30 * b05 - a33 * b01) * d, (a20 * b05 - a22 * b02 + a23 * b01) * d,
+        (a10 * b10 - a11 * b08 + a13 * b06) * d, (a01 * b08 - a00 * b10 - a03 * b06) * d, (a30 * b04 - a31 * b02 + a33 * b00) * d, (a21 * b02 - a20 * b04 - a23 * b00) * d,
+        (a11 * b07 - a10 * b09 - a12 * b06) * d, (a00 * b09 - a01 * b07 + a02 * b06) * d, (a31 * b01 - a30 * b03 - a32 * b00) * d, (a20 * b03 - a21 * b01 + a22 * b00) * d])
+    }
+    function persp(fy, as, n, f) { const t = 1 / Math.tan(fy / 2), o = new Float32Array(16); o[0] = t / as; o[5] = t; o[10] = (f + n) / (n - f); o[11] = -1; o[14] = 2 * f * n / (n - f); return o }
+    function look(ex, ey, ez, tx, ty, tz) {
+        let zx = ex - tx, zy = ey - ty, zz = ez - tz; const zl = Math.hypot(zx, zy, zz) || 1; zx /= zl; zy /= zl; zz /= zl;
+        let xx = zz, xy = 0, xz = -zx; const xl = Math.hypot(xx, xy, xz) || 1; xx /= xl; xz /= xl;   // cross(up(0,1,0), z)
+        const yx = zy * xz - zz * xy, yy = zz * xx - zx * xz, yz = zx * xy - zy * xx;
+        return new Float32Array([xx, yx, zx, 0, xy, yy, zy, 0, xz, yz, zz, 0, -(xx * ex + xy * ey + xz * ez), -(yx * ex + yy * ey + yz * ez), -(zx * ex + zy * ey + zz * ez), 1])
+    }
+    const wrapA = a => { while (a > Math.PI) a -= 2 * Math.PI; while (a < -Math.PI) a += 2 * Math.PI; return a };
+    const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+    /* ---------------- colour helpers ---------------- */
+    function hsl(h, s, l) { h = (((h % 360) + 360) % 360) / 360; const a = s * Math.min(l, 1 - l), f = n => { const k = (n + h * 12) % 12; return l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1)) }; return [f(0), f(8), f(4), 1] }
+    function hex(c) {
+        c = String(c); if (c[0] != "#") return cssRGB(c);
+        if (c.length == 4) c = "#" + c[1] + c[1] + c[2] + c[2] + c[3] + c[3];
+        return [parseInt(c.slice(1, 3), 16) / 255, parseInt(c.slice(3, 5), 16) / 255, parseInt(c.slice(5, 7), 16) / 255, c.length >= 9 ? parseInt(c.slice(7, 9), 16) / 255 : 1]
+    }
+    let rgbCtx = null;
+    function cssRGB(s) {
+        let r = rgbC.get(s); if (r) return r;
+        try { if (!rgbCtx) { const c = D.createElement("canvas"); c.width = c.height = 1; rgbCtx = c.getContext("2d", { willReadFrequently: true }) } rgbCtx.clearRect(0, 0, 1, 1); rgbCtx.fillStyle = "#000"; rgbCtx.fillStyle = s; rgbCtx.fillRect(0, 0, 1, 1); const d = rgbCtx.getImageData(0, 0, 1, 1).data; r = [d[0] / 255, d[1] / 255, d[2] / 255, 1] } catch (e) { r = [1, 1, 1, 1] }
+        if (rgbC.size > 300) rgbC.clear(); rgbC.set(s, r); return r
+    }
+    const mulC = (c, m) => [c[0] * m, c[1] * m, c[2] * m, c[3]];
+
+    /* ---------------- GL setup ---------------- */
+    const VS = `#version 300 es
+layout(location=0) in vec3 aPos; layout(location=1) in vec3 aNrm; layout(location=2) in vec4 aCol; layout(location=3) in vec2 aUv;
+uniform mat4 uVP; uniform mat4 uM; out vec3 vN; out vec4 vC; out vec2 vUv;
+void main(){ vec4 w = uM * vec4(aPos, 1.0); vN = mat3(uM) * aNrm; vC = aCol; vUv = aUv; gl_Position = uVP * w; }`;
+    const FS = `#version 300 es
+precision mediump float; in vec3 vN; in vec4 vC; in vec2 vUv; uniform vec4 uCol; uniform vec4 uCol2; uniform int uMode; uniform sampler2D uTex; out vec4 o;
+void main(){
+  if (uMode == 2) { float h = normalize(vN).y * 0.5 + 0.5; o = vec4(mix(uCol2.rgb, uCol.rgb, smoothstep(0.42, 0.85, h)), 1.0); return; }
+  vec4 b = vC * uCol;
+  if (uMode == 1) b *= texture(uTex, vUv);
+  if (b.a < 0.01) discard;
+  float l = 1.0;
+  if (uMode == 0) { vec3 n = normalize(vN); l = 0.52 + 0.48 * max(dot(n, normalize(vec3(0.35, 0.85, 0.45))), 0.0); }
+  o = vec4(b.rgb * l, b.a);
+}`;
+    function sh(t, s) { const o = gl.createShader(t); gl.shaderSource(o, s); gl.compileShader(o); if (!gl.getShaderParameter(o, gl.COMPILE_STATUS)) throw new Error("shader: " + gl.getShaderInfoLog(o)); return o }
+    const PV = (a, x, y, z, nx, ny, nz, c, u, v) => a.push(x, y, z, nx, ny, nz, c[0], c[1], c[2], c[3], u, v);
+    function quadF(a, p0, p1, p2, p3, n, c) { PV(a, p0[0], p0[1], p0[2], n[0], n[1], n[2], c, 0, 0); PV(a, p1[0], p1[1], p1[2], n[0], n[1], n[2], c, 1, 0); PV(a, p2[0], p2[1], p2[2], n[0], n[1], n[2], c, 1, 1); PV(a, p0[0], p0[1], p0[2], n[0], n[1], n[2], c, 0, 0); PV(a, p2[0], p2[1], p2[2], n[0], n[1], n[2], c, 1, 1); PV(a, p3[0], p3[1], p3[2], n[0], n[1], n[2], c, 0, 1) }
+    function pushBox(a, x0, y0, z0, x1, y1, z1, c, top) {
+        top = top || mulC(c, 1.15);
+        quadF(a, [x0, y1, z1], [x1, y1, z1], [x1, y1, z0], [x0, y1, z0], [0, 1, 0], top);
+        quadF(a, [x0, y0, z0], [x1, y0, z0], [x1, y0, z1], [x0, y0, z1], [0, -1, 0], mulC(c, .6));
+        quadF(a, [x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1], [0, 0, 1], c);
+        quadF(a, [x1, y0, z0], [x0, y0, z0], [x0, y1, z0], [x1, y1, z0], [0, 0, -1], c);
+        quadF(a, [x1, y0, z1], [x1, y0, z0], [x1, y1, z0], [x1, y1, z1], [1, 0, 0], c);
+        quadF(a, [x0, y0, z0], [x0, y0, z1], [x0, y1, z1], [x0, y1, z0], [-1, 0, 0], c)
+    }
+    function attribs() { gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 48, 0); gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 3, gl.FLOAT, false, 48, 12); gl.enableVertexAttribArray(2); gl.vertexAttribPointer(2, 4, gl.FLOAT, false, 48, 24); gl.enableVertexAttribArray(3); gl.vertexAttribPointer(3, 2, gl.FLOAT, false, 48, 40) }
+    function mkMesh(arr, usage) { const vao = gl.createVertexArray(); gl.bindVertexArray(vao); const b = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, b); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(arr), usage || gl.STATIC_DRAW); attribs(); gl.bindVertexArray(null); return { vao, buf: b, n: arr.length / 12 } }
+    function freeMesh(m) { if (m) { try { gl.deleteBuffer(m.buf); gl.deleteVertexArray(m.vao) } catch (e) { } } }
+    function mkTex(canvas) { const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE); if (canvas) upTex(t, canvas); return t }
+    function upTex(t, canvas) { gl.bindTexture(gl.TEXTURE_2D, t); gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, canvas) }
+
+    function initGL() {
+        if (gl) return;
+        cv = D.createElement("canvas"); cv.id = "vrc"; cv.style.cssText = "position:fixed;left:0;top:0;width:100%;height:100%;z-index:0;display:none;touch-action:none";
+        gl = cv.getContext("webgl2", { antialias: true, alpha: false, xrCompatible: true, powerPreference: "high-performance" });
+        if (!gl) { cv = null; throw new Error("WebGL2 is not available in this browser") }
+        const c2 = D.getElementById("c"); c2.parentNode.insertBefore(cv, c2.nextSibling);
+        prog = gl.createProgram(); gl.attachShader(prog, sh(gl.VERTEX_SHADER, VS)); gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, FS)); gl.linkProgram(prog);
+        if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error("link: " + gl.getProgramInfoLog(prog));
+        gl.useProgram(prog); for (const n of ["uVP", "uM", "uCol", "uCol2", "uMode", "uTex"]) U[n] = gl.getUniformLocation(prog, n);
+        gl.uniform1i(U.uTex, 0);
+        const w = [1, 1, 1, 1];
+        // unit meshes
+        let a = []; pushBox(a, -.5, -.5, -.5, .5, .5, .5, w, w); MESH.cube = mkMesh(a);
+        a = []; const LA = 12, LO = 18; for (let i = 0; i < LA; i++) for (let j = 0; j < LO; j++) {
+            const p = (i, j) => { const t = Math.PI * i / LA, q = 2 * Math.PI * j / LO; return [Math.sin(t) * Math.cos(q) * .5, Math.cos(t) * .5, Math.sin(t) * Math.sin(q) * .5] };
+            const A = p(i, j), B = p(i + 1, j), C = p(i + 1, j + 1), Dd = p(i, j + 1), nn = q => [q[0] * 2, q[1] * 2, q[2] * 2];
+            [A, B, C, A, C, Dd].forEach(q => { const n = nn(q); PV(a, q[0], q[1], q[2], n[0], n[1], n[2], w, 0, 0) })
+        } MESH.sph = mkMesh(a);
+        a = []; const SG = 12; for (let j = 0; j < SG; j++) {
+            const t0 = 2 * Math.PI * j / SG, t1 = 2 * Math.PI * (j + 1) / SG, c0 = Math.cos(t0) * .5, s0 = Math.sin(t0) * .5, c1 = Math.cos(t1) * .5, s1 = Math.sin(t1) * .5;
+            const n0 = [c0 * 2, 0, s0 * 2], n1 = [c1 * 2, 0, s1 * 2];
+            PV(a, c0, -.5, s0, n0[0], 0, n0[2], w, 0, 0); PV(a, c1, -.5, s1, n1[0], 0, n1[2], w, 0, 0); PV(a, c1, .5, s1, n1[0], 0, n1[2], w, 0, 0);
+            PV(a, c0, -.5, s0, n0[0], 0, n0[2], w, 0, 0); PV(a, c1, .5, s1, n1[0], 0, n1[2], w, 0, 0); PV(a, c0, .5, s0, n0[0], 0, n0[2], w, 0, 0)
+        } MESH.cyl = mkMesh(a);
+        a = []; quadF(a, [-.5, -.5, 0], [.5, -.5, 0], [.5, .5, 0], [-.5, .5, 0], [0, 0, 1], w); MESH.quad = mkMesh(a);
+        pvao = gl.createVertexArray(); gl.bindVertexArray(pvao); pbuf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, pbuf); attribs(); gl.bindVertexArray(null);
+        const wc = D.createElement("canvas"); wc.width = wc.height = 2; const wx = wc.getContext("2d"); wx.fillStyle = "#fff"; wx.fillRect(0, 0, 2, 2); whiteTex = mkTex(wc);
+        // vignette, hud, toast, menu canvases
+        const vc = D.createElement("canvas"); vc.width = vc.height = 256; const vx = vc.getContext("2d"), vg = vx.createRadialGradient(128, 128, 60, 128, 128, 128); vg.addColorStop(0, "rgba(0,0,0,0)"); vg.addColorStop(.55, "rgba(0,0,0,0)"); vg.addColorStop(1, "rgba(0,0,0,1)"); vx.fillStyle = vg; vx.fillRect(0, 0, 256, 256); vigT = mkTex(vc);
+        hud = mkPanel(512, 300); toast = mkPanel(1024, 160); menuT = mkPanel(1024, 704);
+        cv.addEventListener("pointerdown", e => { cam.drag = e.pointerId; cam.lx = e.clientX; cam.ly = e.clientY; try { cv.setPointerCapture(e.pointerId) } catch (x) { } });
+        cv.addEventListener("pointermove", e => { if (cam.drag === e.pointerId) { cam.yaw -= (e.clientX - cam.lx) * .006; cam.pit = clamp(cam.pit + (e.clientY - cam.ly) * .005, -.3, 1.3); cam.lx = e.clientX; cam.ly = e.clientY } });
+        const up = e => { if (cam.drag === e.pointerId) cam.drag = null }; cv.addEventListener("pointerup", up); cv.addEventListener("pointercancel", up);
+        cv.addEventListener("wheel", e => { cam.dist = clamp(cam.dist * (1 + Math.sign(e.deltaY) * .1), 3, 60); e.preventDefault() }, { passive: false });
+    }
+    function mkPanel(w, h) { const c = D.createElement("canvas"); c.width = w; c.height = h; return { cv: c, cx: c.getContext("2d"), tex: mkTex(c), w, h, key: "" } }
+
+    /* ---------------- drawing primitives ---------------- */
+    function useMesh(m) { gl.bindVertexArray(m.vao) }
+    function dm(mesh, M4, c, mode, tex) {
+        gl.uniformMatrix4fv(U.uM, false, M4); gl.uniform4f(U.uCol, c[0], c[1], c[2], c[3] == null ? 1 : c[3]); gl.uniform1i(U.uMode, mode || 0);
+        if (mode == 1) { gl.bindTexture(gl.TEXTURE_2D, tex || whiteTex) }
+        gl.bindVertexArray(mesh.vao); gl.drawArrays(gl.TRIANGLES, 0, mesh.n)
+    }
+    function cylM(ax, ay, az, bx, by, bz, r) {
+        const dx = bx - ax, dy = by - ay, dz = bz - az, L = Math.hypot(dx, dy, dz) || 1e-4, ux = dx / L, uy = dy / L, uz = dz / L;
+        let hx = 0, hy = 0, hz = 1; if (Math.abs(uz) > .9) { hx = 1; hz = 0 }
+        let xx = hy * uz - hz * uy, xy = hz * ux - hx * uz, xz = hx * uy - hy * ux; const xl = Math.hypot(xx, xy, xz) || 1; xx /= xl; xy /= xl; xz /= xl;
+        const zx = uy * xz - uz * xy, zy = uz * xx - ux * xz, zz = ux * xy - uy * xx, d = 2 * r;
+        return bas((ax + bx) / 2, (ay + by) / 2, (az + bz) / 2, xx * d, xy * d, xz * d, dx, dy, dz, zx * d, zy * d, zz * d)
+    }
+    function sphere(x, y, z, r, c) { dm(MESH.sph, tsr(x, y, z, 2 * r, 2 * r, 2 * r), c, 0) }
+    function spriteM(cx_, cy_, cz_, w, h, rx, rz, flip) { return bas(cx_, cy_, cz_, rx * w * flip, 0, rz * w * flip, 0, h, 0, -rz, 0, rx) }
+
+    /* text / label textures (cached) */
+    function labelTex(key, w, h, draw) {
+        let t = tagC.get(key); if (t) return t;
+        if (tagC.size > 160) { tagC.forEach(q => { try { gl.deleteTexture(q.tex) } catch (e) { } }); tagC.clear() }
+        const c = D.createElement("canvas"); c.width = w; c.height = h; const x = c.getContext("2d"); try { draw(x, w, h) } catch (e) { }
+        t = { tex: mkTex(c), w, h }; tagC.set(key, t); return t
+    }
+    const pill = (x, w, h, col) => { x.fillStyle = "rgba(0,0,0,.62)"; x.beginPath(); x.roundRect(2, 2, w - 4, h - 4, h / 2 - 2); x.fill(); if (col) { x.strokeStyle = col; x.lineWidth = 3; x.stroke() } };
+    function fitText(x, s, maxW, px) { x.font = "bold " + px + "px sans-serif"; while (x.measureText(s).width > maxW && px > 12) x.font = "bold " + (--px) + "px sans-serif" }
+
+    /* cosmetics: every shop item is drawn by the game's own 2D code, then ONLY the pixels the item adds are kept (diff vs. a bare gorilla) -> transparent sprite */
+    function cosTex(slot, id) {
+        const key = slot + "|" + id; let t = cosC.get(key); if (t) return t;
+        if (cosC.size > 90) { cosC.forEach(q => { try { q.tex && gl.deleteTexture(q.tex) } catch (e) { } }); cosC.clear() }
+        t = { tex: null }; cosC.set(key, t);
+        try {
+            const N = 256, K = 2, none = { hat: "none", face: "none", back: "none", trail: "none", hand: "none", shirt: "none" };
+            const mkc = eq => { const c = D.createElement("canvas"); c.width = c.height = N; const x = c.getContext("2d", { willReadFrequently: true }); x.translate(N / 2, N / 2); x.scale(K, K); const g = mk({ nn: 1, name: "", hue: 30, f: 1, r: "owner", eq }); g.t = 0; g.x = 0; g.y = 0; x.save(); try { drawG(g, x) } catch (e) { } x.restore(); return { c, x } };
+            const A = mkc(Object.assign({}, none)), B = mkc(Object.assign({}, none, { [slot]: id }));
+            const da = A.x.getImageData(0, 0, N, N), db = B.x.getImageData(0, 0, N, N), a = da.data, b = db.data; let any = 0;
+            for (let i = 0; i < a.length; i += 4) { const same = Math.abs(a[i] - b[i]) < 5 && Math.abs(a[i + 1] - b[i + 1]) < 5 && Math.abs(a[i + 2] - b[i + 2]) < 5 && Math.abs(a[i + 3] - b[i + 3]) < 5; if (same) b[i + 3] = 0; else any = 1 }
+            if (any) { B.x.putImageData(db, 0, 0); t.tex = mkTex(B.c) }
+        } catch (e) { }
+        return t
+    }
+
+    /* ---------------- static world ---------------- */
+    const KIND = { w: "#1a1a28", d: "#7b5a3a", s: "#8a6a4a", p: "#6c7a89", t: "#5a3b22", br: "#6b4526", l: "#6b4526", mz: "#3a2a5a", tree: "#4a3a22", pump: "#e8761a", stone: "#6b6f7a", web: "#dddddd", ghost: "#e8f4ff", car: "#c44", pks: "#7a5a9a", pke: "#7a5a9a", hb: "#8a6a4a" };
+    const ROCK = { sd: ["#c78d52", "#ecc57f"], rk: ["#a8532c", "#d4804f"], ar: ["#b9683a", "#e08f5a"], stn: ["#56777f", "#7eaab2"] };
+    function buildWorld() {
+        if (!gl || !M) return; freeWorld();
+        const SC = V.SC, gy = M.gy, a = [], X = x => x * SC, Y = y => (gy - y) * SC, Z = z => z * SC, W = { sig: R.length, M: M };
+        const box = (x, y, w, h, z0, z1, c, top) => pushBox(a, X(x), Y(y + h), Z(z0), X(x + w), Y(y), Z(z1), c, top);
+        for (const b of R) {
+            const k = b.k; if (k == "none" || k == "inv" || k == "bn") continue;
+            if (k == "w") { if (b.y < 0 || b.h < 0) continue; box(b.x, b.y, b.w, b.h, -DZ, DZ, hex("#1a1a28")); continue }
+            if (k == "f") { box(b.x, b.y, b.w, b.h, -DZ, DZ, hex(M.gc || "#3a3a52"), hex(M.gt || "#55557a")); continue }
+            if (k == "ld") {   // ladder: two rails + rungs
+                const zl = 26; box(b.x + 4, b.y, 7, b.h, -zl, zl, hex("#7a5a30")); box(b.x + b.w - 11, b.y, 7, b.h, -zl, zl, hex("#7a5a30"));
+                for (let y = b.y + 10; y < b.y + b.h; y += 26) box(b.x + 8, y, b.w - 16, 6, -zl, zl, hex("#a6824a")); continue
+            }
+            let c, d = DZ, top = null;
+            if (k == "b") { const s = b.s | 0; c = hsl(220 + s % 40, .18, (14 + s % 10) / 100); top = hex("#8a93a8"); d = 150 }
+            else if (ROCK[k]) { c = hex(ROCK[k][0]); top = hex(ROCK[k][1]) }
+            else if (k == "car") { c = hsl((b.s | 0) * 70, .6, .45); d = 40 }
+            else if (b.hd || k == "tree" || k == "t") { c = hex(KIND[k] || "#5a3b22"); d = 36 }
+            else if (k == "pump" || k == "stone" || k == "web" || k == "ghost") { c = hex(KIND[k]); d = 36 }
+            else { c = hex(KIND[k] || "#7a7488"); d = b.o ? 150 : DZ }
+            box(b.x, b.y, b.w, b.h, -d, d, c, top)
+        }
+        W.mesh = mkMesh(a);
+        // painted backdrop: the map's own 2D art (title signs, boards, staff display...) on the far walls
+        const k = Math.min(1, 4096 / M.W, 2048 / M.H), cvb = D.createElement("canvas"); cvb.width = Math.max(64, M.W * k | 0); cvb.height = Math.max(64, M.H * k | 0);
+        BD = { cv: cvb, cx: cvb.getContext("2d"), k, tex: mkTex(null), next: 0, sig: "" }; paintBackdrop(true);
+        WORLD = W
+    }
+    function freeWorld() { if (WORLD) { freeMesh(WORLD.mesh) } if (BD && BD.tex) { try { gl.deleteTexture(BD.tex) } catch (e) { } } WORLD = null; BD = null }
+    function paintBackdrop(force) {
+        if (!BD || !M) return; const now = performance.now(), shop = M.n == "shop";
+        let sig = ""; if (shop) { let n = null; try { n = nearItem() } catch (e) { } sig = (n ? n.id : "") + "|" + S.coins + "|" + JSON.stringify(S.eq) + "|" + Object.keys(S.own || {}).length; if (!force && sig == BD.sig) return } else if (!force && now < BD.next) return;
+        BD.sig = sig; BD.next = now + 600;
+        const c = BD.cx, k = BD.k; c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, BD.cv.width, BD.cv.height); c.scale(k, k);
+        const g = c.createLinearGradient(0, 0, 0, M.H); g.addColorStop(0, M.sky[0]); g.addColorStop(1, M.sky[1]); c.fillStyle = g; c.fillRect(0, 0, M.W, M.H);
+        V.cc = c;
+        try {
+            if (M.bg) M.bg.forEach((h, i) => { const x = i * 160 + 40; c.fillStyle = HW ? (M.n == "city" ? "#0c0818" : "#150f22") : M.n == "city" ? "#0f1626" : "#1d3b30"; if (M.n == "city") c.fillRect(x, M.gy - h, 110, h); else { c.fillRect(x + 50, M.gy - h * .5, 24, h * .5); c.beginPath(); c.arc(x + 62, M.gy - h * .5, 70, 0, 7); c.fill() } });
+            if (M.pre) M.pre(c);
+            if (M.D) M.D.forEach(d => { c.fillStyle = "#1f6b35cc"; c.beginPath(); c.arc(d.x, d.y, d.r, 0, 7); c.fill(); c.fillStyle = "#2e8b45aa"; c.beginPath(); c.arc(d.x - 30, d.y - 20, d.r * .7, 0, 7); c.fill() });
+            if (M.dec) M.dec(c);
+        } catch (e) { } finally { V.cc = null }
+        upTex(BD.tex, BD.cv)
+    }
+
+    /* ---------------- scene ---------------- */
+    function renderEye(Vm, Pm, ex, ey, ez, inXR) {
+        const SC = V.SC, gy = M.gy, VP = mul(Pm, Vm), t = performance.now() / 1000;
+        gl.uniformMatrix4fv(U.uVP, false, VP);
+        let rx = Vm[0], rz = Vm[8]; const rl = Math.hypot(rx, rz); if (rl < .05) { rx = 1; rz = 0 } else { rx /= rl; rz /= rl }
+        const Q = [], push = (x, y, z, fn) => Q.push({ d: (x - ex) * (x - ex) + (y - ey) * (y - ey) + (z - ez) * (z - ez), fn });
+        gl.disable(gl.BLEND); gl.enable(gl.DEPTH_TEST); gl.depthMask(true); gl.disable(gl.CULL_FACE);
+        // sky dome
+        gl.disable(gl.DEPTH_TEST); gl.depthMask(false); const s0 = hex(M.sky[0]), s1 = hex(M.sky[1]); gl.uniform4f(U.uCol2, s1[0], s1[1], s1[2], 1);
+        dm(MESH.sph, tsr(ex, ey, ez, 3000, 3000, 3000), s0, 2); gl.enable(gl.DEPTH_TEST); gl.depthMask(true);
+        // painted far walls (back + a mirrored one on the near side)
+        if (BD) {
+            const w = M.W * SC, h = M.H * SC, cxm = w / 2, cym = (gy - M.H / 2) * SC;
+            dm(MESH.quad, bas(cxm, cym, -DZ * SC, w, 0, 0, 0, h, 0, 0, 0, 1), [1, 1, 1, 1], 1, BD.tex);
+            dm(MESH.quad, bas(cxm, cym, DZ * SC, -w, 0, 0, 0, h, 0, 0, 0, -1), [.85, .85, .85, 1], 1, BD.tex)
+        }
+        if (WORLD) dm(WORLD.mesh, I4(), [1, 1, 1, 1], 0);
+        // portals (posts now, glow later)
+        for (const p of M.P || []) {
+            const hue = p.c != null ? p.c : (t * 100) % 360, mx = (p.x + p.w / 2) * SC, zh = (p.tn == "up" ? p.w * .8 : 110) * SC, cy = (gy - (p.y + p.h / 2)) * SC, hh = p.h * SC, post = hex("#23233c");
+            dm(MESH.cube, tsr(mx, cy, -zh, .35 * SC / .03, hh + 12 * SC, .35 * SC / .03), post, 0); dm(MESH.cube, tsr(mx, cy, zh, .35 * SC / .03, hh + 12 * SC, .35 * SC / .03), post, 0);
+            dm(MESH.cube, tsr(mx, (gy - p.y) * SC + 6 * SC, 0, .35 * SC / .03, .5 * SC / .03, zh * 2 + .35), post, 0);
+            const c = hsl(hue, .95, .62), me_in = typeof me != "undefined" && me && me.x > p.x && me.x < p.x + p.w && me.y > p.y && me.y < p.y + p.h; c[3] = (me_in ? .55 : .3) + .12 * Math.sin(t * 3);
+            push(mx, cy, 0, () => dm(MESH.cube, tsr(mx, cy, 0, .08 * SC / .03, hh, zh * 2), c, 3));
+            const lb = labelTex("pl|" + p.l + "|" + (p.c != null ? p.c : "r"), 384, 64, (x, w2, h2) => { pill(x, w2, h2, "hsl(" + (p.c != null ? p.c : 50) + ",90%,65%)"); fitText(x, p.l, w2 - 40, 30); x.fillStyle = "#fff"; x.textAlign = "center"; x.textBaseline = "middle"; x.fillText(p.l, w2 / 2, h2 / 2 + 2) });
+            const ly = (gy - p.y) * SC + 2.2 * SC / .03 * 1.0 + 0.4, lw = 3.2 * SC / .03;
+            push(mx, ly, 0, () => { gl.uniformMatrix4fv(U.uM, false, spriteM(mx, ly, 0, lw, lw / 6, rx, rz, 1)); dm(MESH.quad, spriteM(mx, ly, 0, lw, lw / 6, rx, rz, 1), [1, 1, 1, 1], 1, lb.tex) })
+        }
+        for (const w of M.Wt || []) { const c = [.25, .6, 1, .35], x = (w.x + w.w / 2) * SC, y = (gy - w.y - w.h / 2) * SC; push(x, y, 0, () => dm(MESH.cube, tsr(x, y, 0, w.w * SC, w.h * SC, DZ * 2 * SC), c, 3)) }
+        for (const w of M.Wd || []) { const c = [1, 1, 1, .1], x = (w.x + w.w / 2) * SC, y = (gy - w.y - w.h / 2) * SC; push(x, y, 0, () => dm(MESH.cube, tsr(x, y, 0, w.w * SC, w.h * SC, 240 * SC), c, 3)) }
+        // players
+        for (const g of G) { try { gorilla(g, g == me && inXR, ex, ez, rx, rz, push) } catch (e) { if (!V.gerr) { V.gerr = 1; console.warn("VR gorilla", e) } } }
+        // particles (one batched draw)
+        if (typeof parts != "undefined" && parts.length) {
+            const a = [], rs = SC * 1.6, ux = 0, uy = 1;
+            parts.forEach(p => { if (p.zz == null) p.zz = (Math.random() - .5) * 60; const c = cssRGB(p.c || "#fff"), al = clamp(p.l * 1.6, 0, 1), s = (p.s || 4) * rs, x = p.x * SC, y = (gy - p.y) * SC, z = p.zz * SC, col = [c[0], c[1], c[2], al];
+                quadF(a, [x - rx * s, y - s, z - rz * s], [x + rx * s, y - s, z + rz * s], [x + rx * s, y + s, z + rz * s], [x - rx * s, y + s, z - rz * s], [0, 0, 1], col) });
+            if (a.length) push(ex, ey, ez - 9999, () => { gl.bindVertexArray(pvao); gl.bindBuffer(gl.ARRAY_BUFFER, pbuf); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(a), gl.STREAM_DRAW); gl.uniformMatrix4fv(U.uM, false, I4()); gl.uniform4f(U.uCol, 1, 1, 1, 1); gl.uniform1i(U.uMode, 3); gl.drawArrays(gl.TRIANGLES, 0, a.length / 12) })
+        }
+        if (inXR) controllers(push, ex, ey, ez);
+        // transparent pass, far to near
+        gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); gl.depthMask(false);
+        Q.sort((p, q) => q.d - p.d); for (const q of Q) q.fn();
+        // overlays (menu panel / wrist hud / toast / vignette)
+        if (inXR) { overlays(Vm, Pm, ex, ey, ez, rx, rz) }
+        gl.depthMask(true); gl.disable(gl.BLEND)
+    }
+
+    function gorilla(g, self, ex, ez, rx, rz, push) {
+        const SC = V.SC, gy = M.gy, sz = g.sz || 1, f = g.f || 1, t = g.t || 0, gx = g.x, gv = g.y;
+        const P = (x, y, z) => [x * SC, (gy - y) * SC, (z || 0) * SC];
+        const col = g.it && HW ? hsl(95 + Math.sin(t * 5) * 8, .55, .36 + .06 * Math.sin(t * 8)) : g.it ? hsl((t * 300) % 20, .9, .45 + .1 * Math.sin(t * 8)) : hsl(g.hue, .55, .42);
+        const dk = g.it && HW ? hex("#1c4a14") : g.it ? hex("#7a0d0d") : hsl(g.hue, .5, .28), skin = g.it ? (HW ? hex("#b9d98a") : hex("#ffb08a")) : hex("#d9b38c");
+        const hs = V.hs || [];   // arms + hands (always drawn, also for yourself in first person)
+        (g.h || []).forEach((h, i) => {
+            const zs = (i ? -1 : 1) * f * 9 * sz, a = P(gx, gv - 2 * sz, zs), b = P(gx + h.x, gv + h.y, zs);
+            dm(MESH.cyl, cylM(a[0], a[1], a[2], b[0], b[1], b[2], 4 * sz * SC), dk, 0); sphere(b[0], b[1], b[2], 7 * sz * SC, skin)
+        });
+        if (self) return;
+        const bo = P(gx, gv, 0); sphere(bo[0], bo[1], bo[2], 16 * sz * SC, col);
+        const hd = P(gx + 5 * f * sz, gv - 14 * sz, 0); sphere(hd[0], hd[1], hd[2], 10 * sz * SC, col);
+        const sn = P(gx + 9 * f * sz, gv - 12 * sz, 0); sphere(sn[0], sn[1], sn[2], 6.5 * sz * SC, skin);
+        for (const zz of [-4, 4]) { const e = P(gx + 10 * f * sz, gv - 15 * sz, zz * sz), p2 = P(gx + 11.4 * f * sz, gv - 15 * sz, zz * sz); sphere(e[0], e[1], e[2], 2.4 * sz * SC, [1, 1, 1, 1]); sphere(p2[0], p2[1], p2[2], 1.2 * sz * SC, [0, 0, 0, 1]) }
+        // cosmetics as camera-facing cut-outs, pushed slightly toward the viewer so they sit in front of the body
+        let e; try { e = seq(g) } catch (x) { e = g.eq || {} }
+        const dx = ex - bo[0], dz = ez - bo[2], dl = Math.hypot(dx, dz) || 1, off = 22 * sz * SC, cx_ = bo[0] + dx / dl * off, cz_ = bo[2] + dz / dl * off, size = 128 * SC * sz;
+        const flip = (rx * f) < -.05 ? -1 : 1;
+        for (const slot of ["shirt", "back", "hat", "face", "hand"]) {
+            const id = e && e[slot]; if (!id || id == "none") continue; const ct = cosTex(slot, id); if (!ct.tex) continue;
+            const o = slot == "hat" || slot == "face" ? 1.02 : 1;
+            push(cx_, bo[1], cz_, () => dm(MESH.quad, spriteM(cx_, bo[1], cz_, size * o, size * o, rx, rz, flip), [1, 1, 1, 1], 1, ct.tex))
+        }
+        if (g.nn) return;
+        const role = g == me && typeof ucOn != "undefined" && ucOn ? "" : g.r, label = (role == "owner" ? "[OWNER] " : role == "mod" ? "[MOD] " : role == "creator" ? "[CREATOR] " : "") + (g.name || "") + (g.it ? (HW ? " 🧟" : " 🔥") : "");
+        const tc = role == "owner" ? "#ffd23f" : role == "mod" ? "#4fc3ff" : role == "creator" ? "#ff5c5c" : g.it ? "#ff6b6b" : "#ffffff";
+        const lt = labelTex("nm|" + label + "|" + tc, 320, 64, (x, w, h) => { pill(x, w, h); fitText(x, label, w - 36, 32); x.fillStyle = tc; x.textAlign = "center"; x.textBaseline = "middle"; x.fillText(label, w / 2, h / 2 + 2) });
+        const ty = (gy - (gv - 44 * sz)) * SC, tw = 48 * SC * Math.max(.8, sz);
+        push(bo[0], ty, bo[2], () => dm(MESH.quad, spriteM(bo[0], ty, bo[2], tw, tw / 5, rx, rz, 1), [1, 1, 1, 1], 1, lt.tex))
+    }
+
+    function controllers(push, ex, ey, ez) {
+        for (const c of st.ctl) {
+            if (!c.m) continue; const m = c.m, body = c.hand == "left" ? [.25, .55, 1, 1] : [1, .45, .3, 1];
+            dm(MESH.cube, mul(m, tsr(0, 0, .03, .045, .04, .13)), body, 0);
+            if (c.ray && (V.menu || st.hover >= 0)) { const o = c.ro, d = c.rd, L = c.rl || 3; const q = cylM(o[0], o[1], o[2], o[0] + d[0] * L, o[1] + d[1] * L, o[2] + d[2] * L, .004); push(o[0], o[1], o[2], () => dm(MESH.cyl, q, [1, .95, .4, .8], 3)) }
+        }
+    }
+
+    /* ---------------- HUD, toast, menu ---------------- */
+    function drawHud() {
+        const c = hud.cx, W = hud.w, H = hud.h, now = performance.now(); c.clearRect(0, 0, W, H);
+        c.fillStyle = "rgba(14,12,30,.82)"; c.beginPath(); c.roundRect(2, 2, W - 4, H - 4, 26); c.fill(); c.strokeStyle = "#ffd23f"; c.lineWidth = 4; c.stroke();
+        c.textBaseline = "top"; c.textAlign = "left"; c.fillStyle = "#fff"; c.font = "bold 34px sans-serif";
+        c.fillText("🪙 " + S.coins + (HW ? "   🍬 " + (S.candy | 0) : ""), 24, 18); c.textAlign = "right"; c.fillStyle = "#9fd8ff"; c.font = "bold 26px sans-serif";
+        c.fillText("📍 " + M.n.toUpperCase() + (RM ? "  🌐 " + (Object.keys(OG).length + 1) : ""), W - 24, 22);
+        c.textAlign = "left"; c.font = "bold 30px sans-serif";
+        let line = "", col = "#fff";
+        if (!M.nr) { const inf = G.filter(g => g.it).length; line = RM && G.length < 2 ? "Waiting for players..." : rd.st == "wait" ? "Infection in " + Math.ceil(rd.t) : rd.st == "end" ? "Round over" : "Time " + (rd.t | 0) + "s   Infected " + inf + "/" + G.length }
+        if (me.it) { c.fillStyle = "#ff6b6b"; c.fillText("🔥 YOU ARE IT", 24, 70) } else if (line) { c.fillStyle = "#ffe97a"; c.fillText(line, 24, 70) }
+        if (me.it && line) { c.fillStyle = "#ffe97a"; c.font = "24px sans-serif"; c.fillText(line, 24, 108) }
+        c.fillStyle = "#c8f5c0"; c.font = "bold 24px sans-serif"; if (msgT > 0) c.fillText(String(msg).slice(0, 44), 24, 140);
+        c.font = "22px sans-serif"; let y = 178; const L = (typeof CH != "undefined" ? CH : []).slice(-3);
+        for (const m of L) { c.fillStyle = m.sys ? "#ffd23f" : "#ffffffd0"; c.fillText(String((m.n ? m.n + ": " : "") + (m.txt || "")).slice(0, 38), 24, y); y += 28 }
+        c.fillStyle = "#ffffff80"; c.font = "18px sans-serif"; c.fillText("Y = menu   A = hop/climb   stick = run", 24, H - 30);
+    }
+    function drawToast() {
+        const c = toast.cx, W = toast.w, H = toast.h; c.clearRect(0, 0, W, H); if (!(msgT > 0)) return;
+        c.fillStyle = "rgba(10,10,24,.7)"; c.beginPath(); c.roundRect(4, 20, W - 8, H - 40, 40); c.fill();
+        fitText(c, String(msg), W - 80, 54); c.fillStyle = "#ffe97a"; c.textAlign = "center"; c.textBaseline = "middle"; c.fillText(String(msg), W / 2, H / 2 + 2)
+    }
+    function menuItems() {
+        const it = [], add = (x, y, w, h, label, on, fn) => it.push({ x, y, w, h, label, on, fn }), lab = (y, t) => it.push({ x: 40, y, w: 0, h: 0, label: t, txt: 1 });
+        let y = 84; lab(y, "TRAVEL"); y += 14;
+        const maps = [["lobby", "LOBBY"], ["shop", "SHOP"], ["forest", "FOREST"], ["city", "CITY"], ["sky", "SKY"], ["desert", "DESERT"]]; if (typeof ST != "undefined" && ST) maps.push(["staff", "STAFF"]);
+        maps.forEach((m, i) => add(40 + (i % 4) * 236, y + ((i / 4) | 0) * 64, 224, 54, m[1], M.n == m[0], () => { V.menu = 0; load(m[0]) }));
+        y += (Math.ceil(maps.length / 4)) * 64 + 14;
+        lab(y, "MODE"); y += 14; add(40, y, 224, 54, "BOTS (offline)", !S.online, () => el("mo0").click()); add(276, y, 224, 54, "ONLINE", !!S.online, () => el("mo1").click()); y += 70;
+        lab(y, "VOICE"); y += 14;[["OFF", 0], ["PUSH-TO-TALK (L trigger)", 1], ["OPEN MIC", 2]].forEach((v, i) => add(40 + i * 236, y, 224, 54, v[0], S.vm == v[1], () => el("vm" + v[1]).click())); y += 70;
+        lab(y, "WORLD SIZE  (smaller = you are bigger and slower)"); y += 14;[["SMALL", .02], ["MEDIUM", .03], ["LARGE", .045]].forEach((v, i) => add(40 + i * 236, y, 224, 54, v[0], Math.abs(V.SC - v[1]) < .001, () => V.setScale(v[1]))); y += 70;
+        add(40, y, 224, 54, "COMFORT VIGNETTE", !!V.vig, () => { V.vig = V.vig ? 0 : 1; S.vvig = V.vig; try { save() } catch (e) { } }); add(276, y, 224, 54, "RECENTER", 0, () => { st.p0 = null; say("Recentered") }); add(512, y, 224, 54, "RESPAWN", 0, () => { V.menu = 0; try { tkey("r", 1); tkey("r", 0) } catch (e) { } });
+        y += 70; add(40, y, 224, 54, "EXIT VR", 0, () => { V.menu = 0; V.exit() }); add(276, y, 224, 54, "CLOSE MENU", 0, () => { V.menu = 0 });
+        return it
+    }
+    function drawMenu() {
+        const c = menuT.cx, W = menuT.w, H = menuT.h; c.clearRect(0, 0, W, H); c.fillStyle = "rgba(27,21,48,.95)"; c.beginPath(); c.roundRect(4, 4, W - 8, H - 8, 30); c.fill(); c.strokeStyle = "#ffd23f"; c.lineWidth = 6; c.stroke();
+        c.fillStyle = "#7a2bd1"; c.beginPath(); c.roundRect(4, 4, W - 8, 62, [30, 30, 0, 0]); c.fill(); c.fillStyle = "#fff"; c.font = "bold 36px sans-serif"; c.textBaseline = "middle"; c.textAlign = "left"; c.fillText("goril VR menu     🪙 " + S.coins, 36, 38);
+        const items = V.items = menuItems();
+        items.forEach((b, i) => {
+            if (b.txt) { c.fillStyle = "#ffd23f"; c.font = "bold 22px sans-serif"; c.textAlign = "left"; c.textBaseline = "top"; c.fillText(b.label, b.x, b.y - 2); return }
+            c.fillStyle = b.on ? "#ffd23f" : (i == st.hover ? "#4a3d78" : "#2d2548"); c.beginPath(); c.roundRect(b.x, b.y, b.w, b.h, 12); c.fill(); c.strokeStyle = i == st.hover ? "#fff" : "#7a2bd1"; c.lineWidth = i == st.hover ? 5 : 3; c.stroke();
+            c.fillStyle = b.on ? "#111" : "#fff"; fitText(c, b.label, b.w - 20, 24); c.textAlign = "center"; c.textBaseline = "middle"; c.fillText(b.label, b.x + b.w / 2, b.y + b.h / 2 + 2)
+        });
+        // pointer dot
+        if (st.mp) { c.fillStyle = "#fff"; c.beginPath(); c.arc(st.mp[0], st.mp[1], 7, 0, 7); c.fill(); c.strokeStyle = "#000"; c.lineWidth = 2; c.stroke() }
+        upTex(menuT.tex, menuT.cv)
+    }
+    const MW = 1.5, MH = MW * 704 / 1024;
+
+    function overlays(Vm, Pm, ex, ey, ez, rx, rz) {
+        const now = performance.now();
+        // wrist HUD: only when the left hand is raised near the face
+        const L = st.ctl.find(c => c.hand == "left" && c.m);
+        if (now > hudNext) { hudNext = now + 200; drawHud(); upTex(hud.tex, hud.cv); drawToast(); upTex(toast.tex, toast.cv) }
+        if (L) {
+            const hx = L.m[12], hy = L.m[13], hz = L.m[14], d = Math.hypot(hx - ex, hy - ey, hz - ez);
+            if (d < .62 && hy > ey - .55) { const w = .26, px = hx, py = hy + .1, pz = hz; dm(MESH.quad, spriteM(px, py, pz, w, w * hud.h / hud.w, rx, rz, 1), [1, 1, 1, 1], 1, hud.tex) }
+        }
+        // menu panel
+        if (V.menu && st.mc) { const m = st.mc; dm(MESH.quad, bas(m.c[0], m.c[1], m.c[2], m.r[0] * MW, 0, m.r[2] * MW, 0, MH, 0, m.n[0], 0, m.n[2]), [1, 1, 1, 1], 1, menuT.tex) }
+        // toast + vignette are glued to the head: draw with identity view
+        gl.disable(gl.DEPTH_TEST); gl.uniformMatrix4fv(U.uVP, false, Pm);
+        if (msgT > 0) dm(MESH.quad, tsr(0, -.2, -1.1, .9, .9 * toast.h / toast.w, 1), [1, 1, 1, 1], 1, toast.tex);
+        if (V.vig && st.vg > .01) dm(MESH.quad, tsr(0, 0, -.25, 1.5, 1.5, 1), [1, 1, 1, clamp(st.vg, 0, .92)], 1, vigT);
+        gl.enable(gl.DEPTH_TEST)
+    }
+
+    /* ---------------- XR input ---------------- */
+    const K = (k, on) => { on = !!on; if (st.ks[k] !== on) { st.ks[k] = on; try { tkey(k, on) } catch (e) { } } };
+    const edge = (id, now) => { const was = st.pb[id]; st.pb[id] = now; return now && !was };
+    function pulse(src) { try { const h = src.gamepad && src.gamepad.hapticActuators && src.gamepad.hapticActuators[0]; if (h && h.pulse) h.pulse(.25, 30) } catch (e) { } }
+    function poll(fr, hw) {
+        const ctl = []; let sy = 0, jump = 0, grip = 0, ptt = 0, ePress = 0, rPress = 0, menuB = 0, trigEdge = null, bEdge = 0;
+        for (const src of sess.inputSources) {
+            const hand = src.handedness || "none", c = { hand, src, m: null, rm: null };
+            try { if (src.gripSpace) { const p = fr.getPose(src.gripSpace, ref); if (p) c.m = mul(st.Rg, p.transform.matrix) } if (src.targetRaySpace) { const p = fr.getPose(src.targetRaySpace, ref); if (p) { c.rm = mul(st.Rg, p.transform.matrix); c.ro = [c.rm[12], c.rm[13], c.rm[14]]; const dl = Math.hypot(c.rm[8], c.rm[9], c.rm[10]) || 1; c.rd = [-c.rm[8] / dl, -c.rm[9] / dl, -c.rm[10] / dl]; c.ray = 1 } } } catch (e) { }
+            ctl.push(c); const gp = src.gamepad; if (!gp) continue;
+            const ax = gp.axes || [], b = i => !!(gp.buttons[i] && gp.buttons[i].pressed), y = ax.length >= 4 ? ax[3] : (ax[1] || 0);
+            if (Math.abs(y) > Math.abs(sy)) sy = y;
+            const trig = b(0), e0 = edge(hand + "t", trig); if (e0) trigEdge = c;
+            if (hand == "left") { ptt = ptt || trig; grip = grip || b(1); ePress = ePress || b(4); if (edge("lY", b(5))) menuB = 1 }
+            else { jump = jump || b(4) || (trig && !V.menu); grip = grip || b(1); ePress = ePress || b(5); rPress = rPress || b(3); if (edge("rB", b(5))) bEdge = 1 }
+        }
+        st.ctl = ctl;
+        if (menuB) { V.menu = V.menu ? 0 : 1; if (V.menu) placeMenu(hw) }
+        if (V.menu) {
+            for (const k of ["a", "d", "w", "s", "e", "r", "v"]) K(k, 0); st.sign = 0;
+            // laser vs panel
+            st.hover = -1; st.mp = null; const m = st.mc; let best = null;
+            for (const c of ctl) { if (!c.ray) continue; const dn = c.rd[0] * m.n[0] + c.rd[2] * m.n[2]; if (Math.abs(dn) < 1e-4) continue; const tt = ((m.c[0] - c.ro[0]) * m.n[0] + (m.c[1] - c.ro[1]) * m.n[1] + (m.c[2] - c.ro[2]) * m.n[2]) / (c.rd[0] * m.n[0] + c.rd[1] * m.n[1] + c.rd[2] * m.n[2]); if (tt <= 0 || tt > 8) continue;
+                const px = c.ro[0] + c.rd[0] * tt - m.c[0], py = c.ro[1] + c.rd[1] * tt - m.c[1], pz = c.ro[2] + c.rd[2] * tt - m.c[2], lx = (px * m.r[0] + pz * m.r[2]) / MW, ly = py / MH;
+                c.rl = tt; if (!best || c.hand == "right") { best = c; st.mp = [(lx + .5) * menuT.w, (.5 - ly) * menuT.h] } }
+            if (st.mp && V.items) { V.items.forEach((b, i) => { if (!b.txt && st.mp[0] >= b.x && st.mp[0] <= b.x + b.w && st.mp[1] >= b.y && st.mp[1] <= b.y + b.h) st.hover = i }) }
+            if (trigEdge && st.hover >= 0 && V.items[st.hover] && V.items[st.hover].fn) { pulse(trigEdge.src); try { V.items[st.hover].fn() } catch (e) { console.warn(e) } }
+            if (bEdge) V.menu = 0;
+            return
+        }
+        st.hover = -1;
+        // run: stick forward = keep going the way you face, stick back = turn around and go. The direction is locked for the whole push so the auto-turn can't flip it.
+        const sg = sy < -.45 ? 1 : sy > .45 ? -1 : 0; if (sg !== st.sign) { st.sign = sg; st.base = (typeof me != "undefined" && me.f) || 1 }
+        const want = sg * st.base; K("d", want > 0); K("a", want < 0); K("w", jump); K("s", grip); K("e", ePress); K("r", rPress); K("v", ptt)
+    }
+    function placeMenu(hw) {
+        let fx = -hw[8], fz = -hw[10]; const l = Math.hypot(fx, fz) || 1; fx /= l; fz /= l;
+        st.mc = { c: [hw[12] + fx * 1.25, hw[13] - .12, hw[14] + fz * 1.25], r: [-fz, 0, fx], n: [-fx, 0, -fz] }
+    }
+
+    /* ---------------- frame loops ---------------- */
+    function vrSim(dt) { tick(dt); vcTick(); pfTick() }
+    function headWorld() { const SC = V.SC, sz = me.sz || 1; return [(me.x + 5 * (me.f || 1) * sz) * SC, (M.gy - (me.y - 15 * sz)) * SC] }
+    function speedVig(dt) { const sp = Math.hypot(me.vx, me.vy), tg = clamp((sp - 380) / 900, 0, .85); st.vg += (tg - st.vg) * Math.min(1, dt * 5) }
+    function onXR(t, fr) {
+        const s = sess; if (!s) return; s.requestAnimationFrame(onXR);
+        const dt = clamp((t - st.lt) / 1000, 0, .033); st.lt = t;
+        try {
+            if (!WORLD || WORLD.M !== M || WORLD.sig !== R.length) buildWorld();
+            const pose = fr.getViewerPose(ref); if (!pose) { vrSim(dt); return }
+            const hp = pose.transform.position;
+            if (!st.p0) { st.p0 = { x: hp.x, y: hp.y, z: hp.z }; st.yaw = me.f > 0 ? -Math.PI / 2 : Math.PI / 2 }
+            const tg = (me.f || 1) > 0 ? -Math.PI / 2 : Math.PI / 2; st.yaw += wrapA(tg - st.yaw) * (1 - Math.exp(-dt * 11));
+            const c = Math.cos(st.yaw), sn = Math.sin(st.yaw), head = headWorld(), p0 = st.p0;
+            const rx = c * p0.x + sn * p0.z, rz = -sn * p0.x + c * p0.z;
+            st.Rg = rotYm(st.yaw, head[0] - rx, head[1] - p0.y, 0 - rz);
+            const hw = mul(st.Rg, pose.transform.matrix);
+            poll(fr, hw); if (V.menu) drawMenu(); vrSim(dt); speedVig(dt); paintBackdrop(false);
+            // sim moved: rebuild rig with fresh head position so the view never lags a frame behind the body
+            const h2 = headWorld(); st.Rg = rotYm(st.yaw, h2[0] - rx, h2[1] - p0.y, 0 - rz);
+            gl.bindFramebuffer(gl.FRAMEBUFFER, layer.framebuffer); gl.clearColor(0, 0, 0, 1); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+            gl.useProgram(prog);
+            for (const view of pose.views) {
+                const vp = layer.getViewport(view); gl.viewport(vp.x, vp.y, vp.width, vp.height);
+                const ew = mul(st.Rg, view.transform.matrix); renderEye(inv(ew), view.projectionMatrix, ew[12], ew[13], ew[14], true)
+            }
+            st.errs = 0
+        } catch (e) { if (++st.errs < 4) console.warn("VR frame", e); if (st.errs > 40) { say("VR crashed: " + e.message); V.exit() } }
+    }
+    V.render = function (dt) {   // desktop 3D view (no headset): called from the normal game loop after the simulation step
+        try {
+            if (!WORLD || WORLD.M !== M || WORLD.sig !== R.length) buildWorld();
+            const dpr = Math.min(2, devicePixelRatio || 1), w = innerWidth * dpr | 0, h = innerHeight * dpr | 0; if (cv.width != w || cv.height != h) { cv.width = w; cv.height = h }
+            speedVig(dt); paintBackdrop(false); const now = performance.now(); if (now > hudNext) { hudNext = now + 200; drawHud(); const dc = V.hudDom; if (dc) { const x = dc.getContext("2d"); x.clearRect(0, 0, dc.width, dc.height); x.drawImage(hud.cv, 0, 0) } }
+            gl.useProgram(prog); gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.viewport(0, 0, w, h); gl.clearColor(0, 0, 0, 1); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+            const SC = V.SC, tx = me.x * SC, ty = (M.gy - me.y + 12) * SC, cp = Math.cos(cam.pit), ex = tx + Math.sin(cam.yaw) * cp * cam.dist, ey = ty + Math.sin(cam.pit) * cam.dist, ez = Math.cos(cam.yaw) * cp * cam.dist;
+            renderEye(look(ex, ey, ez, tx, ty, 0), persp(1.0, w / h, .1, 4000), ex, ey, ez, false)
+        } catch (e) { if (!V.perr) { V.perr = 1; console.warn("VR preview", e); say("3D view error: " + e.message) } }
+    };
+
+    /* ---------------- enter / exit ---------------- */
+    function updUI() {
+        const b = el("vrb"), c = el("v3b"), s = el("vrs"); if (!b) return;
+        b.textContent = V.xr ? "🥽 Exit VR" : "🥽 Enter VR (headset)"; c.textContent = V.on && !V.xr ? "🖥 Exit 3D view" : "🖥 3D view (no headset)";
+        s.textContent = V.xr ? "In VR. Y = menu, A = hop/climb, stick = run, B = interact." : V.on ? "3D view: drag to look around, wheel to zoom. Keyboard works as normal." : !isSecureContext ? "VR needs https or http://localhost (you are on an insecure page)." : V.sup === false ? "No VR runtime found. Start SteamVR / Virtual Desktop first, then reload." : "Start SteamVR / Virtual Desktop first, then press Enter VR."
+    }
+    function show3D(on) {
+        initGL(); cv.style.display = on ? "block" : "none"; el("c").style.visibility = on ? "hidden" : "visible";
+        if (on && !V.hudDom) { const d = D.createElement("canvas"); d.width = 512; d.height = 300; d.style.cssText = "position:fixed;left:8px;top:8px;width:320px;height:188px;z-index:3;pointer-events:none"; D.body.appendChild(d); V.hudDom = d }
+        if (V.hudDom) V.hudDom.style.display = on && !V.xr ? "block" : "none"
+    }
+    V.enter3D = function () { try { show3D(true); V.on = 1; V.xr = 0; buildWorld(); say("3D view ON - drag to look around") } catch (e) { V.on = 0; say("3D view failed: " + e.message); console.warn(e) } updUI() };
+    V.exit3D = function () { V.on = 0; V.xr = 0; if (cv) show3D(false); freeWorld(); for (const k in st.ks) K(k, 0); updUI() };
+    V.exit = function () { if (sess) { try { sess.end() } catch (e) { V.exit3D() } } else V.exit3D() };
+    V.setScale = function (v) { V.SC = v; S.vsc = v; try { save() } catch (e) { } buildWorld(); st.p0 = null };
+    V.toggleXR = async function () {
+        if (V.xr) return V.exit();
+        try {
+            if (!navigator.xr) throw new Error("WebXR is not available here. Use Chrome/Edge on http://localhost (or https).");
+            initGL(); V.on = 1; show3D(true);
+            const s = await navigator.xr.requestSession("immersive-vr", { optionalFeatures: ["local-floor", "bounded-floor"] });
+            sess = s; V.xr = 1; show3D(true);
+            s.addEventListener("end", () => { sess = null; ref = null; layer = null; V.xr = 0; V.menu = 0; st.ctl = []; V.exit3D(); say("Left VR") });
+            layer = new XRWebGLLayer(s, gl, { antialias: true, alpha: false }); s.updateRenderState({ baseLayer: layer, depthNear: .05, depthFar: 4000 });
+            try { ref = await s.requestReferenceSpace("local-floor") } catch (e) { ref = await s.requestReferenceSpace("local") }
+            st.p0 = null; st.lt = performance.now(); st.errs = 0; buildWorld(); s.requestAnimationFrame(onXR); say("VR on - Y = menu, A = hop, stick = run"); updUI()
+        } catch (e) { console.warn("VR", e); sess = null; V.xr = 0; V.exit3D(); say("VR: " + (e && e.message ? e.message : e) + " - try the 3D view"); updUI() }
+    };
+
+    // menu wiring: runs on the first load() of the game, when the main script's state exists
+    function init() {
+        try {
+            if (S.vsc) V.SC = clamp(+S.vsc, .015, .06); if (S.vvig != null) V.vig = S.vvig ? 1 : 0;
+            el("vrb").onclick = () => V.toggleXR(); el("v3b").onclick = () => { if (V.on) V.exit(); else V.enter3D() };
+            if (navigator.xr && navigator.xr.isSessionSupported) navigator.xr.isSessionSupported("immersive-vr").then(ok => { V.sup = ok; updUI() }).catch(() => { V.sup = false; updUI() });
+            updUI()
+        } catch (e) { console.warn("VR init", e) }
+    }
+    let inited = 0;
+    V.onLoad = function () { if (!inited) { inited = 1; init() } if (V.on && gl) { st.p0 = null; buildWorld() } };
+    return V
+})();
+    </script>
     <script>
         const cv = document.getElementById("c"), cx = cv.getContext("2d"), $ = i => document.getElementById(i);
         let TOUCH = (() => { try { return matchMedia("(pointer: coarse)").matches && !matchMedia("(any-pointer: fine)").matches } catch (e) { return false } })();   // phones / tablets without a mouse; also switched on by the first real touch
@@ -1601,7 +2102,7 @@
         function load(n, from) {
             M = MAPS[n](); M.n = n; if (HW) hwInit(M); R = M.R; parts = []; G = []; me = mk({ name: S.name, hue: S.hue, eq: S.eq });
             if (!M.nr && !S.online) for (let i = 0; i < S.bots; i++) { const e = {}; for (const c in CAT) e[c] = Math.random() < .5 ? "none" : CAT[c][Math.random() * CAT[c].length | 0][0]; G.push(mk({ bot: 1, name: "goril" + (Math.random() * 99 | 0), hue: Math.random() * 360, eq: e })) }
-            if (ucOn) ucApply(); G.unshift(me); G.forEach(place); me.it = 0; me.tg = 0; lastAlive = null; if (from && M.ent && M.ent[from]) { me.x = M.ent[from][0]; me.y = M.ent[from][1]; const vw0 = W0 / Z; cam.x = Math.max(0, Math.min(M.W - vw0, me.x - vw0 / 2)); cam.y = Math.max(0, Math.min(M.H - 820, me.y - 410)) } rd = { st: "wait", t: 4 }; cd = 1; say(n == "lobby" ? (HW ? "The Spooky Update is here! Grab candy & mystery pumpkins on every map!" : "Welcome! Press M for the menu, E at a portal.") : n == "shop" ? "Welcome to the shop! Stand at an item and press E." : n == "staff" ? "Staff lounge - chill! Press Q for the staff menu." : n == "team" ? "Meet the staff team!" : n == "desert" ? "The Desert! Cracks in the sand lead down into the canyons - and back out again." : "Get ready... infection starts soon!"); net()
+            if (ucOn) ucApply(); G.unshift(me); G.forEach(place); me.it = 0; me.tg = 0; lastAlive = null; if (from && M.ent && M.ent[from]) { me.x = M.ent[from][0]; me.y = M.ent[from][1]; const vw0 = W0 / Z; cam.x = Math.max(0, Math.min(M.W - vw0, me.x - vw0 / 2)); cam.y = Math.max(0, Math.min(M.H - 820, me.y - 410)) } rd = { st: "wait", t: 4 }; cd = 1; say(n == "lobby" ? (HW ? "The Spooky Update is here! Grab candy & mystery pumpkins on every map!" : "Welcome! Press M for the menu, E at a portal.") : n == "shop" ? "Welcome to the shop! Stand at an item and press E." : n == "staff" ? "Staff lounge - chill! Press Q for the staff menu." : n == "team" ? "Meet the staff team!" : n == "desert" ? "The Desert! Cracks in the sand lead down into the canyons - and back out again." : "Get ready... infection starts soon!"); net(); try { VR.onLoad() } catch (e) { console.warn(e) }
         }
         /* ---------- BOT AI ----------
            Bots are made to feel like decent (not perfect) players: they climb walls/trees by holding W into them,
@@ -1929,7 +2430,7 @@
             else { c.beginPath(); c.arc(p.x, p.y, p.s, 0, 7); c.fill() }
         }
         function drawG(g, ctx) {
-            const c = ctx || cx, f = g.f, e = seq(g), col = g.it && HW ? `hsl(${95 + Math.sin(g.t * 5) * 8},55%,${36 + 6 * Math.sin(g.t * 8)}%)` : g.it ? `hsl(${g.t * 300 % 20},90%,${45 + 10 * Math.sin(g.t * 8)}%)` : `hsl(${g.hue},55%,42%)`, dk = g.it && HW ? "#1c4a14" : g.it ? "#7a0d0d" : `hsl(${g.hue},50%,28%)`;
+            const c = ctx || VR.cc || cx, f = g.f, e = seq(g), col = g.it && HW ? `hsl(${95 + Math.sin(g.t * 5) * 8},55%,${36 + 6 * Math.sin(g.t * 8)}%)` : g.it ? `hsl(${g.t * 300 % 20},90%,${45 + 10 * Math.sin(g.t * 8)}%)` : `hsl(${g.hue},55%,42%)`, dk = g.it && HW ? "#1c4a14" : g.it ? "#7a0d0d" : `hsl(${g.hue},50%,28%)`;
             c.save(); c.translate(g.x, g.y);
             const sz = g.sz || 1; c.scale(sz, sz); c.lineCap = "round"; c.strokeStyle = dk; c.lineWidth = 8; g.h.forEach(h => { c.beginPath(); c.moveTo(0, -2); c.lineTo(h.x / sz, h.y / sz); c.stroke() });
             c.save(); c.scale(f, 1);
@@ -1988,7 +2489,8 @@
             c.fillStyle = "#d9b38c"; c.lineWidth = 2; g.h.forEach(h => { c.beginPath(); c.arc(h.x, h.y, 7, 0, 7); c.fill(); c.stroke() }); c.restore()
         }
         function frame(t) {
-            const dt = Math.min(.033, (t - last) / 1000); last = t; tick(dt); vcTick(); pfTick(); $("sb").hidden = !(ST || CR); if (ST || CR) { const l = ST ? "🛡 Staff (Q)" : "🎬 Creator (Q)"; if ($("sb").textContent != l) $("sb").textContent = l } if (!CR && cro) crT(0); if (!(ST || CR)) { if (fpOn) fpT(0); if (cleanOn) cleanT(0); crZoom = 1 }
+            const dt = Math.min(.033, (t - last) / 1000); last = t; if (VR.xr) return requestAnimationFrame(frame); tick(dt); vcTick(); pfTick(); $("sb").hidden = !(ST || CR); if (ST || CR) { const l = ST ? "🛡 Staff (Q)" : "🎬 Creator (Q)"; if ($("sb").textContent != l) $("sb").textContent = l } if (!CR && cro) crT(0); if (!(ST || CR)) { if (fpOn) fpT(0); if (cleanOn) cleanT(0); crZoom = 1 }
+            if (VR.on) { VR.render(dt); return requestAnimationFrame(frame) }
             Z = ZB * (fpOn ? 2.4 : crZoom); const vw = W0 / Z, vh = H0 / Z, lead = fpOn ? me.f * vw * .22 : 0, ck = Math.min(1, dt * (fpOn ? 16 : 8)); cam.x += (Math.max(0, Math.min(M.W - vw, me.x + lead - vw / 2)) - cam.x) * ck; cam.y += (Math.max(0, Math.min(M.H - vh, me.y - vh / 2)) - cam.y) * ck;
             bg(); const c = cx; c.save(); c.scale(Z, Z); c.translate(-cam.x, -cam.y);
             if (M.pre) M.pre(c); if (M.D) M.D.forEach(d => { c.fillStyle = "#1f6b35cc"; c.beginPath(); c.arc(d.x, d.y, d.r, 0, 7); c.fill(); c.fillStyle = "#2e8b45aa"; c.beginPath(); c.arc(d.x - 30, d.y - 20, d.r * .7, 0, 7); c.fill() });
