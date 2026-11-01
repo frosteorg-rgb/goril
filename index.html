@@ -1030,6 +1030,10 @@ void main(){
                 quadF(a, [x1, y0, z1], [x1, y0, z0], [x1, y1, z0], [x1, y1, z1], [1, 0, 0], c);
                 quadF(a, [x0, y0, z0], [x0, y0, z1], [x0, y1, z1], [x0, y1, z0], [-1, 0, 0], c)
             }
+            function pushSphere(a, cx, cy, cz, rx, ry, rz, col, sg) {
+                sg = sg || 8; const rg = 5, Pp = (u, v) => { const th = u / sg * 2 * Math.PI, ph = v / rg * Math.PI, nx = Math.sin(ph) * Math.cos(th), ny = Math.cos(ph), nz = Math.sin(ph) * Math.sin(th); return [cx + nx * rx, cy + ny * ry, cz + nz * rz, nx, ny, nz] };
+                for (let v = 0; v < rg; v++) for (let u = 0; u < sg; u++) { const p0 = Pp(u, v), p1 = Pp(u + 1, v), p2 = Pp(u + 1, v + 1), p3 = Pp(u, v + 1); for (const q of [p0, p1, p2, p0, p2, p3]) PV(a, q[0], q[1], q[2], q[3], q[4], q[5], col, 0, 0) }
+            }
             function attribs() { gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 48, 0); gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 3, gl.FLOAT, false, 48, 12); gl.enableVertexAttribArray(2); gl.vertexAttribPointer(2, 4, gl.FLOAT, false, 48, 24); gl.enableVertexAttribArray(3); gl.vertexAttribPointer(3, 2, gl.FLOAT, false, 48, 40) }
             function mkMesh(arr, usage) { const vao = gl.createVertexArray(); gl.bindVertexArray(vao); const b = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, b); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(arr), usage || gl.STATIC_DRAW); attribs(); gl.bindVertexArray(null); return { vao, buf: b, n: arr.length / 12 } }
             function freeMesh(m) { if (m) { try { gl.deleteBuffer(m.buf); gl.deleteVertexArray(m.vao) } catch (e) { } } }
@@ -1143,12 +1147,13 @@ void main(){
             const ROCK = { sd: ["#c78d52", "#ecc57f"], rk: ["#a8532c", "#d4804f"], ar: ["#b9683a", "#e08f5a"], stn: ["#56777f", "#7eaab2"] };
             function buildWorld() {
                 if (!gl || !M) return; freeWorld();
-                const SC = V.SC, gy = M.gy, a = [], X = x => x * SC, Y = y => (gy - y) * SC, Z = z => z * SC, W = { sig: R.length, M: M };
-                const box = (x, y, w, h, z0, z1, c, top) => pushBox(a, X(x), Y(y + h), Z(z0), X(x + w), Y(y), Z(z1), c, top);
+                const SC = V.SC, gy = M.gy, a = [], X = x => x * SC, Y = y => (gy - y) * SC, Z = z => z * SC, W = { sig: R.length, M: M, solids: [], grabs: [] };
+                let curHd = false; const box = (x, y, w, h, z0, z1, c, top) => { pushBox(a, X(x), Y(y + h), Z(z0), X(x + w), Y(y), Z(z1), c, top); if (!curHd) W.solids.push([X(x), Y(y + h), Z(z0), X(x + w), Y(y), Z(z1)]) };
                 for (const b of R) {
-                    const k = b.k; if (k == "none" || k == "inv" || k == "bn") continue;
+                    const k = b.k; if (k == "none" || k == "inv" || k == "bn") continue; if (k == "w" && (b.x + b.w <= 0 || b.x >= M.W - 1 || b.y + b.h <= 0)) continue;   // map-border walls: gone in VR (free roam)
+                    curHd = !!b.hd || k == "ld"; if (curHd) W.grabs.push([X(b.x), Y(b.y + b.h), Z(-45), X(b.x + b.w), Y(b.y), Z(45)]);
                     if (k == "w") { if (b.y < 0 || b.h < 0) continue; box(b.x, b.y, b.w, b.h, -DZ, DZ, hex("#1a1a28")); continue }
-                    if (k == "f") { box(b.x, b.y, b.w, b.h, -DZ, DZ, hex(M.gc || "#3a3a52"), hex(M.gt || "#55557a")); continue }
+                    if (k == "f") { const big = b.x <= 0 && b.x + b.w >= M.W; if (big) box(b.x - 3000, b.y, b.w + 6000, b.h, -3500, 3500, hex(M.gc || "#3a3a52"), hex(M.gt || "#55557a")); else box(b.x, b.y, b.w, b.h, -DZ, DZ, hex(M.gc || "#3a3a52"), hex(M.gt || "#55557a")); continue }
                     if (k == "ld") {   // ladder: two rails + rungs
                         const zl = 26; box(b.x + 4, b.y, 7, b.h, -zl, zl, hex("#7a5a30")); box(b.x + b.w - 11, b.y, 7, b.h, -zl, zl, hex("#7a5a30"));
                         for (let y = b.y + 10; y < b.y + b.h; y += 26) box(b.x + 8, y, b.w - 16, 6, -zl, zl, hex("#a6824a")); continue
@@ -1163,43 +1168,82 @@ void main(){
                     box(b.x, b.y, b.w, b.h, -d, d, c, top)
                 }
 
-                // 3D scenery beyond both side walls: buildings / trees / bushes + ground, so the corridor is lined with real objects
-                W.props = []; const rnd = i => ((i * 2654435761) >>> 0) / 4294967296, city = M.n == "city";
-                if (M.n != "sky") {
-                    const gc = mulC(hex(M.gc || "#3a3a52"), .7), gt = mulC(hex(M.gt || "#55557a"), .7);
-                    pushBox(a, X(-60), Y(gy + 160), Z(-1500), X(M.W + 60), Y(gy), Z(-DZ), gc, gt); pushBox(a, X(-60), Y(gy + 160), Z(DZ), X(M.W + 60), Y(gy), Z(1500), gc, gt)
-                }
-                (M.bg || []).forEach((h, i) => {
-                    for (const sd of [-1, 1]) {
-                        const x = i * 160 + 40 + (sd > 0 ? 55 : 0), dist = DZ + 90 + rnd(i * 2 + (sd > 0 ? 1 : 0)) * 420, zc = sd * dist, hh = h * (.8 + rnd(i + 9) * .5);
-                        if (city) { const c = mulC(hex(HW ? "#0c0818" : "#0f1626"), 2.2); box(x, gy - hh, 110, hh, zc - 60, zc + 60, c, mulC(c, 1.5)) }
-                        else {
-                            box(x + 50, gy - hh * .5, 24, hh * .5, zc - 12, zc + 12, hex(HW ? "#2a1a30" : "#4a3322"));
-                            W.props.push({ m: tsr((x + 62) * SC, Y(gy - hh * .5), zc * SC, 140 * SC, 120 * SC, 140 * SC), c: hex(HW ? "#2a2147" : "#1d5a3c") })
+                // ---- free-roam scenery (all solid trunks/rocks/buildings are collidable) ----
+                curHd = false; W.props = [];
+                {
+                    let sd = 7; for (const ch_ of String(M.n)) sd = (sd * 31 + ch_.charCodeAt(0)) >>> 0;
+                    const rn = () => { sd = (sd + 0x6D2B79F5) >>> 0; let t = sd; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296 };
+                    const blk = R.filter(b => !b.hd && b.k != "w" && b.k != "ld" && !(b.k == "f") && b.y + b.h > gy - 700 && b.y < gy + 50);
+                    const clear = (x, z, r) => { if (Math.abs(z) < 110) return false; for (const b of blk) if (x > b.x - r && x < b.x + b.w + r && Math.abs(z) < 260 + r) return false; for (const sp of M.sp || []) if (Math.hypot(x - sp[0], z) < 150) return false; return true };
+                    const hasGround = R.some(b => b.k == "f" && b.x <= 0 && b.x + b.w >= M.W), mn = M.n, forest = mn != "city" && mn != "desert" && mn != "sky";
+                    const N = !hasGround ? 0 : mn == "forest" ? 420 : forest ? 260 : mn == "city" ? 170 : mn == "desert" ? 150 : 0;
+                    for (let n = 0, tries = 0; n < N && tries < N * 8; tries++) {
+                        const x = -2200 + rn() * (M.W + 4400), z = (rn() * 2 - 1) * 3100, q = rn();
+                        if (mn == "city") {
+                            const w = 80 + rn() * 140, dd = 80 + rn() * 140, h = 260 + rn() * 900; if (!clear(x, z, w)) continue; n++;
+                            const c = hsl(205 + rn() * 50, .22, .14 + rn() * .1); box(x - w / 2, gy - h, w, h, z - dd / 2, z + dd / 2, c, mulC(c, 1.7)); continue
                         }
+                        if (mn == "desert") {
+                            if (!clear(x, z, 50)) continue; n++;
+                            if (q < .35) { const w = 40 + rn() * 90, h = 25 + rn() * 70, c = hex(ROCK.rk[(rn() * 2) | 0]); box(x - w / 2, gy - h, w, h, z - w / 2, z + w / 2, c, mulC(c, 1.2)); continue }
+                            const h = 110 + rn() * 150, g = hex("#2e7d32"); box(x - 10, gy - h, 20, h, z - 10, z + 10, g); box(x - 34, gy - h * .55, 26, 13, z - 6, z + 6, g); box(x - 34, gy - h * .55 - 42, 13, 55, z - 6, z + 6, g); box(x + 8, gy - h * .7, 26, 13, z - 6, z + 6, g); box(x + 21, gy - h * .7 - 36, 13, 49, z - 6, z + 6, g); continue
+                        }
+                        if (!clear(x, z, 60)) continue; n++;
+                        if (q < .12) { const w = 40 + rn() * 90, h = 25 + rn() * 70, c = hex("#6b6f7a"); box(x - w / 2, gy - h, w, h, z - w / 2, z + w / 2, c, mulC(c, 1.25)); continue }
+                        if (q < .3) { const r = 25 + rn() * 35; pushSphere(a, X(x), Y(gy) + r * SC * .3, Z(z), r * SC, r * SC * .7, r * SC, hex(HW ? "#2a2147" : "#2f7d3f"), 7); continue }
+                        const h = 230 + rn() * 300, tw = 24 + rn() * 14, R0 = 90 + rn() * 70;
+                        box(x - tw / 2, gy - h, tw, h, z - tw / 2, z + tw / 2, hex(HW ? "#2a1a30" : "#5a3b22"));
+                        const lc = HW ? hsl(260 + rn() * 40, .35, .22) : hsl(95 + rn() * 55, .5, .24 + rn() * .08);
+                        pushSphere(a, X(x), Y(gy - h) + R0 * SC * .25, Z(z), R0 * SC, R0 * SC * .8, R0 * SC, lc, 9); pushSphere(a, X(x + R0 * .5), Y(gy - h) - R0 * SC * .25, Z(z + R0 * .3), R0 * SC * .7, R0 * SC * .6, R0 * SC * .7, mulC(lc, 1.15), 8)
                     }
-                });
-                (M.D || []).forEach((d, i) => {
-                    for (const sd of [-1, 1]) { const zc = sd * (DZ + 40 + rnd(i * 3 + (sd > 0 ? 1 : 2)) * 260); W.props.push({ m: tsr(d.x * SC, Y(d.y), zc * SC, d.r * 2 * SC, d.r * 1.5 * SC, d.r * 2 * SC), c: hex("#1f6b35") }); W.props.push({ m: tsr((d.x - 30) * SC, Y(d.y - 20), (zc + 6) * SC, d.r * 1.4 * SC, d.r * 1.1 * SC, d.r * 1.4 * SC), c: hex("#2e8b45") }) }
-                });
+                }
                 W.mesh = mkMesh(a);
                 // painted backdrop: the map's own 2D art (title signs, boards, staff display...) on the far walls
                 const k = Math.min(1, 4096 / M.W, 2048 / M.H), cvb = D.createElement("canvas"); cvb.width = Math.max(64, M.W * k | 0); cvb.height = Math.max(64, M.H * k | 0);
                 BD = { cv: cvb, cx: cvb.getContext("2d"), k, tex: mkTex(null), next: 0, sig: "" }; paintBackdrop(true);
                 WORLD = W
             }
-            function freeWorld() { if (WORLD) { freeMesh(WORLD.mesh) } if (BD && BD.tex) { try { gl.deleteTexture(BD.tex) } catch (e) { } } WORLD = null; BD = null }
+            function freeWorld() { if (WORLD) { freeMesh(WORLD.mesh) } if (BD) freeMesh(BD.mesh); if (BD && BD.tex) { try { gl.deleteTexture(BD.tex) } catch (e) { } } WORLD = null; BD = null }
             function paintBackdrop(force) {
-                if (!BD || !M) return; const now = performance.now(), shop = M.n == "shop";
-                let sig = ""; if (shop) { let n = null; try { n = nearItem() } catch (e) { } sig = (n ? n.id : "") + "|" + S.coins + "|" + JSON.stringify(S.eq) + "|" + Object.keys(S.own || {}).length; if (!force && sig == BD.sig) return } else if (!force && now < BD.next) return;
-                BD.sig = sig; BD.next = now + 600;
-                const c = BD.cx, k = BD.k; c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, BD.cv.width, BD.cv.height); c.scale(k, k);
-                V.cc = c;
+                if (!BD || !M) return; const shop = M.n == "shop";
+                let sig = ""; if (shop) { let n = null; try { n = nearItem() } catch (e) { } sig = (n ? n.id : "") + "|" + S.coins + "|" + JSON.stringify(S.eq) + "|" + Object.keys(S.own || {}).length; if (!force && sig == BD.sig) return } else if (!force) return;
+                BD.sig = sig; const c0 = BD.cx, k = BD.k, SC = V.SC, gy = M.gy, texts = [];
+                c0.setTransform(1, 0, 0, 1, 0, 0); c0.clearRect(0, 0, BD.cv.width, BD.cv.height); c0.scale(k, k);
+                const c = new Proxy(c0, {
+                    get(t, p) { if (p == "fillText") return (str, x, y) => { const m = t.getTransform(); texts.push({ s: String(str), x: (m.a * x + m.c * y + m.e) / k, y: (m.b * x + m.d * y + m.f) / k, sc: Math.abs(m.a) / k, font: t.font, fill: typeof t.fillStyle == "string" ? t.fillStyle : "#fff", al: t.textAlign, bl: t.textBaseline, ga: t.globalAlpha }) }; if (p == "strokeText") return () => { }; const v = t[p]; return typeof v == "function" ? v.bind(t) : v },
+                    set(t, p, v) { t[p] = v; return true }
+                });
+                V.cc = c; try { if (M.pre) M.pre(c); if (M.dec) M.dec(c) } catch (e) { } finally { V.cc = null }
+                const X = x => x * SC, Y = y => (gy - y) * SC, Z = z => z * SC, a = [];
+                const vox = (cells, nx, G, ox, oy, zb, zf) => {   // cells: Map(j*nx+i -> [r,g,b]) -> extruded voxels, hidden faces skipped
+                    cells.forEach((col, key) => {
+                        const i = key % nx, j = (key - i) / nx, x0 = ox + i * G, x1 = x0 + G, yt = oy + j * G, yb = yt + G, c4 = [Math.min(1, col[0] * 1.1), Math.min(1, col[1] * 1.1), Math.min(1, col[2] * 1.1), 1], has = (ii, jj) => cells.has(jj * nx + ii);
+                        quadF(a, [X(x0), Y(yb), Z(zf)], [X(x1), Y(yb), Z(zf)], [X(x1), Y(yt), Z(zf)], [X(x0), Y(yt), Z(zf)], [0, 0, 1], c4);
+                        quadF(a, [X(x1), Y(yb), Z(zb)], [X(x0), Y(yb), Z(zb)], [X(x0), Y(yt), Z(zb)], [X(x1), Y(yt), Z(zb)], [0, 0, -1], mulC(c4, .7));
+                        if (!has(i, j - 1)) quadF(a, [X(x0), Y(yt), Z(zf)], [X(x1), Y(yt), Z(zf)], [X(x1), Y(yt), Z(zb)], [X(x0), Y(yt), Z(zb)], [0, 1, 0], c4);
+                        if (!has(i, j + 1)) quadF(a, [X(x0), Y(yb), Z(zb)], [X(x1), Y(yb), Z(zb)], [X(x1), Y(yb), Z(zf)], [X(x0), Y(yb), Z(zf)], [0, -1, 0], mulC(c4, .7));
+                        if (!has(i + 1, j)) quadF(a, [X(x1), Y(yb), Z(zf)], [X(x1), Y(yb), Z(zb)], [X(x1), Y(yt), Z(zb)], [X(x1), Y(yt), Z(zf)], [1, 0, 0], mulC(c4, .85));
+                        if (!has(i - 1, j)) quadF(a, [X(x0), Y(yb), Z(zb)], [X(x0), Y(yb), Z(zf)], [X(x0), Y(yt), Z(zf)], [X(x0), Y(yt), Z(zb)], [-1, 0, 0], mulC(c4, .85))
+                    })
+                };
                 try {
-                    if (M.pre) M.pre(c);
-                    if (M.dec) M.dec(c);
-                } catch (e) { } finally { V.cc = null }
-                upTex(BD.tex, BD.cv)
+                    const cw = BD.cv.width, ch = BD.cv.height, d = c0.getImageData(0, 0, cw, ch).data;
+                    const pick = G => { const m = new Map(), nx = Math.ceil(M.W / G), ny = Math.ceil(M.H / G); for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) { const px = Math.min(cw - 1, ((i + .5) * G * k) | 0), py = Math.min(ch - 1, ((j + .5) * G * k) | 0), o = (py * cw + px) * 4; if (d[o + 3] > 70) m.set(j * nx + i, [d[o] / 255, d[o + 1] / 255, d[o + 2] / 255]) } return { m, nx } };
+                    let G = 6, pc = pick(G); while (pc.m.size > 16000 && G < 60) { G *= 1.4; pc = pick(G) }
+                    vox(pc.m, pc.nx, G, 0, 0, -DZ - 15, -DZ - 1)
+                    // every sign / board text becomes raised 3D lettering standing on the plaque
+                    const tc = D.createElement("canvas"), tx = tc.getContext("2d", { willReadFrequently: true });
+                    for (const t of texts.slice(0, 160)) {
+                        const pxm = /(\d+(?:\.\d+)?)px/.exec(t.font), fs = Math.max(6, (pxm ? +pxm[1] : 16) * t.sc), font = t.font.replace(/(\d+(?:\.\d+)?)px/, fs + "px");
+                        tx.font = font; const w = Math.min(900, Math.ceil(tx.measureText(t.s).width)); tc.width = w + 12; tc.height = Math.ceil(fs * 1.8) + 12;
+                        tx.font = font; tx.textAlign = t.al; tx.textBaseline = t.bl; tx.fillStyle = t.fill; tx.globalAlpha = t.ga == null ? 1 : t.ga;
+                        const ax = t.al == "center" ? w / 2 + 6 : (t.al == "right" || t.al == "end") ? w + 6 : 6, yb = fs * 1.3 + 6; tx.fillText(t.s, ax, yb);
+                        const td = tx.getImageData(0, 0, tc.width, tc.height).data, g2 = 1.5, nx = Math.ceil(tc.width / g2), ny = Math.ceil(tc.height / g2), m = new Map();
+                        for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) { const px = Math.min(tc.width - 1, ((i + .5) * g2) | 0), py = Math.min(tc.height - 1, ((j + .5) * g2) | 0), o = (py * tc.width + px) * 4; if (td[o + 3] > 110) m.set(j * nx + i, [td[o] / 255, td[o + 1] / 255, td[o + 2] / 255]) }
+                        vox(m, nx, g2, t.x - ax, t.y - yb, -DZ - 1, -DZ + 4)
+                    }
+                } catch (e) { console.warn("decor", e) }
+                freeMesh(BD.mesh); BD.mesh = a.length ? mkMesh(a) : null; BD.rot = bas(M.W * SC, 0, 0, -1, 0, 0, 0, 1, 0, 0, 0, -1)
             }
 
             /* ---------------- scene ---------------- */
@@ -1212,12 +1256,7 @@ void main(){
                 // sky dome
                 gl.disable(gl.DEPTH_TEST); gl.depthMask(false); const s0 = hex(M.sky[0]), s1 = hex(M.sky[1]); gl.uniform4f(U.uCol2, s1[0], s1[1], s1[2], 1);
                 dm(MESH.sph, tsr(ex, ey, ez, 3000, 3000, 3000), s0, 2); gl.enable(gl.DEPTH_TEST); gl.depthMask(true);
-                // painted far walls (back + a mirrored one on the near side)
-                if (BD) {
-                    const w = M.W * SC, h = M.H * SC, cxm = w / 2, cym = (gy - M.H / 2) * SC;
-                    dm(MESH.quad, bas(cxm, cym, -DZ * SC, w, 0, 0, 0, h, 0, 0, 0, 1), [1, 1, 1, 1], 1, BD.tex);
-                    dm(MESH.quad, bas(cxm, cym, DZ * SC, -w, 0, 0, 0, h, 0, 0, 0, -1), [.85, .85, .85, 1], 1, BD.tex)
-                }
+                if (BD && BD.mesh) { dm(BD.mesh, I4(), [1, 1, 1, 1], 0); dm(BD.mesh, BD.rot, [.9, .9, .9, 1], 0) }
                 if (WORLD) { dm(WORLD.mesh, I4(), [1, 1, 1, 1], 0); for (const q of WORLD.props || []) dm(MESH.sph, q.m, q.c, 0) }
                 // portals (posts now, glow later)
                 for (const p of M.P || []) {
@@ -1230,7 +1269,7 @@ void main(){
                     const ly = (gy - p.y) * SC + 2.2 * SC / .03 * 1.0 + 0.4, lw = 3.2 * SC / .03;
                     push(mx, ly, 0, () => { gl.uniformMatrix4fv(U.uM, false, spriteM(mx, ly, 0, lw, lw / 6, rx, rz, 1)); dm(MESH.quad, spriteM(mx, ly, 0, lw, lw / 6, rx, rz, 1), [1, 1, 1, 1], 1, lb.tex) })
                 }
-                for (const w of M.Wt || []) { const c = [.25, .6, 1, .35], x = (w.x + w.w / 2) * SC, y = (gy - w.y - w.h / 2) * SC; push(x, y, 0, () => dm(MESH.cube, tsr(x, y, 0, w.w * SC, w.h * SC, DZ * 2 * SC), c, 3)) }
+                for (const w of M.Wt || []) { const c = [.25, .6, 1, .35], x = (w.x + w.w / 2) * SC, y = (gy - w.y - w.h / 2) * SC; push(x, y, 0, () => dm(MESH.cube, tsr(x, y, 0, w.w * SC, w.h * SC, 6000 * SC), c, 3)) }
                 for (const w of M.Wd || []) { const c = [1, 1, 1, .1], x = (w.x + w.w / 2) * SC, y = (gy - w.y - w.h / 2) * SC; push(x, y, 0, () => dm(MESH.cube, tsr(x, y, 0, w.w * SC, w.h * SC, 240 * SC), c, 3)) }
                 // players
                 for (const g of G) { try { gorilla(g, g == me && inXR, ex, ez, rx, rz, push) } catch (e) { if (!V.gerr) { V.gerr = 1; console.warn("VR gorilla", e) } } }
@@ -1254,16 +1293,16 @@ void main(){
 
             function gorilla(g, self, ex, ez, rx, rz, push) {
                 const SC = V.SC, gy = M.gy, sz = g.sz || 1, f = g.f || 1, t = g.t || 0, gx = g.x, gv = g.y;
-                const P = (x, y, z) => [x * SC, (gy - y) * SC, (z || 0) * SC];
+                const P = (x, y, z) => [x * SC, (gy - y) * SC, ((z || 0) + (g.pz || 0)) * SC];
                 const col = g.it && HW ? hsl(95 + Math.sin(t * 5) * 8, .55, .36 + .06 * Math.sin(t * 8)) : g.it ? hsl((t * 300) % 20, .9, .45 + .1 * Math.sin(t * 8)) : hsl(g.hue, .55, .42);
                 const dk = g.it && HW ? hex("#1c4a14") : g.it ? hex("#7a0d0d") : hsl(g.hue, .5, .28), skin = g.it ? (HW ? hex("#b9d98a") : hex("#ffb08a")) : hex("#d9b38c");
                 const hs = V.hs || [];   // arms + hands (always drawn, also for yourself in first person)
                 (g.h || []).forEach((h, i) => {
                     const zs = (i ? -1 : 1) * f * 9 * sz; let a = P(gx, gv - 2 * sz, zs), b = P(gx + h.x, gv + h.y, zs);
-                    if (self && st.eye) { const cc = st.ctl.find(q => q.hand == (i ? "left" : "right") && q.m); if (cc) { b = [cc.m[12], cc.m[13], cc.m[14]]; a = [st.eye[0], st.eye[1] - .3, st.eye[2] + (i ? -1 : 1) * f * .22] } }
+                    if (self && st.eye) return;
                     dm(MESH.cyl, cylM(a[0], a[1], a[2], b[0], b[1], b[2], 4 * sz * SC), dk, 0); sphere(b[0], b[1], b[2], 7 * sz * SC, skin)
                 });
-                if (self) return;
+                if (self) { if (st.eye) selfArms(g, col, dk, skin); return }
                 const bo = P(gx, gv, 0); sphere(bo[0], bo[1], bo[2], 16 * sz * SC, col);
                 const hd = P(gx + 5 * f * sz, gv - 14 * sz, 0); sphere(hd[0], hd[1], hd[2], 10 * sz * SC, col);
                 const sn = P(gx + 9 * f * sz, gv - 12 * sz, 0); sphere(sn[0], sn[1], sn[2], 6.5 * sz * SC, skin);
@@ -1309,7 +1348,7 @@ void main(){
                 c.fillStyle = "#c8f5c0"; c.font = "bold 24px sans-serif"; if (msgT > 0) c.fillText(String(msg).slice(0, 44), 24, 140);
                 c.font = "22px sans-serif"; let y = 178; const L = (typeof CH != "undefined" ? CH : []).slice(-3);
                 for (const m of L) { c.fillStyle = m.sys ? "#ffd23f" : "#ffffffd0"; c.fillText(String((m.n ? m.n + ": " : "") + (m.txt || "")).slice(0, 38), 24, y); y += 28 }
-                c.fillStyle = "#ffffff80"; c.font = "18px sans-serif"; c.fillText("Push off surfaces with your hands   Y = menu", 24, H - 30);
+                c.fillStyle = "#ffffff80"; c.font = "18px sans-serif"; c.fillText("Hands push off surfaces  Grip=climb  Stick=turn  Y=menu", 24, H - 30);
             }
             function drawToast() {
                 const c = toast.cx, W = toast.w, H = toast.h; c.clearRect(0, 0, W, H); if (!(msgT > 0)) return;
@@ -1325,7 +1364,7 @@ void main(){
                 lab(y, "MODE"); y += 14; add(40, y, 224, 54, "BOTS (offline)", !S.online, () => el("mo0").click()); add(276, y, 224, 54, "ONLINE", !!S.online, () => el("mo1").click()); y += 70;
                 lab(y, "VOICE"); y += 14;[["OFF", 0], ["PUSH-TO-TALK (L trigger)", 1], ["OPEN MIC", 2]].forEach((v, i) => add(40 + i * 236, y, 224, 54, v[0], S.vm == v[1], () => el("vm" + v[1]).click())); y += 70;
                 lab(y, "WORLD SIZE  (smaller = you are bigger and slower)"); y += 14;[["SMALL", .02], ["MEDIUM", .03], ["LARGE", .045]].forEach((v, i) => add(40 + i * 236, y, 224, 54, v[0], Math.abs(V.SC - v[1]) < .001, () => V.setScale(v[1]))); y += 70;
-                add(40, y, 224, 54, "COMFORT VIGNETTE", !!V.vig, () => { V.vig = V.vig ? 0 : 1; S.vvig = V.vig; try { save() } catch (e) { } }); add(276, y, 224, 54, "RECENTER", 0, () => { st.p0 = null; say("Recentered") }); add(512, y, 224, 54, "RESPAWN", 0, () => { V.menu = 0; try { tkey("r", 1); tkey("r", 0) } catch (e) { } });
+                add(40, y, 224, 54, "COMFORT VIGNETTE", !!V.vig, () => { V.vig = V.vig ? 0 : 1; S.vvig = V.vig; try { save() } catch (e) { } }); add(276, y, 224, 54, "RECENTER", 0, () => { st.rig = null; say("Recentered") }); add(512, y, 224, 54, "RESPAWN", 0, () => { V.menu = 0; try { tkey("r", 1); tkey("r", 0) } catch (e) { } });
                 y += 70; add(40, y, 224, 54, "EXIT VR", 0, () => { V.menu = 0; V.exit() }); add(276, y, 224, 54, "CLOSE MENU", 0, () => { V.menu = 0 });
                 return it
             }
@@ -1367,18 +1406,18 @@ void main(){
             const edge = (id, now) => { const was = st.pb[id]; st.pb[id] = now; return now && !was };
             function pulse(src) { try { const h = src.gamepad && src.gamepad.hapticActuators && src.gamepad.hapticActuators[0]; if (h && h.pulse) h.pulse(.25, 30) } catch (e) { } }
             function poll(fr, hw) {
-                const ctl = []; let sy = 0, jump = 0, grip = 0, ptt = 0, ePress = 0, rPress = 0, menuB = 0, trigEdge = null, bEdge = 0;
+                const ctl = []; let tx = 0, sy = 0, jump = 0, grip = 0, ptt = 0, ePress = 0, rPress = 0, menuB = 0, trigEdge = null, bEdge = 0;
                 for (const src of sess.inputSources) {
                     const hand = src.handedness || "none", c = { hand, src, m: null, rm: null };
                     try { if (src.gripSpace) { const p = fr.getPose(src.gripSpace, ref); if (p) { c.mr = p.transform.matrix; c.m = mul(st.Rg, c.mr); const q = p.transform.position; c.raw = [q.x, q.y, q.z] } } if (src.targetRaySpace) { const p = fr.getPose(src.targetRaySpace, ref); if (p) { c.rm = mul(st.Rg, p.transform.matrix); c.ro = [c.rm[12], c.rm[13], c.rm[14]]; const dl = Math.hypot(c.rm[8], c.rm[9], c.rm[10]) || 1; c.rd = [-c.rm[8] / dl, -c.rm[9] / dl, -c.rm[10] / dl]; c.ray = 1 } } } catch (e) { }
                     ctl.push(c); const gp = src.gamepad; if (!gp) continue;
                     const ax = gp.axes || [], b = i => !!(gp.buttons[i] && gp.buttons[i].pressed), y = ax.length >= 4 ? ax[3] : (ax[1] || 0);
-                    if (Math.abs(y) > Math.abs(sy)) sy = y;
+                    if (Math.abs(y) > Math.abs(sy)) sy = y; c.grip = b(1); { const x = ax.length >= 4 ? ax[2] : (ax[0] || 0); if (Math.abs(x) > Math.abs(tx)) tx = x }
                     const trig = b(0), e0 = edge(hand + "t", trig); if (e0) trigEdge = c;
                     if (hand == "left") { ptt = ptt || trig; grip = grip || b(1); ePress = ePress || b(4); if (edge("lY", b(5))) menuB = 1 }
                     else { jump = jump || b(4) || (trig && !V.menu); grip = grip || b(1); ePress = ePress || b(5); rPress = rPress || b(3); if (edge("rB", b(5))) bEdge = 1 }
                 }
-                st.ctl = ctl;
+                st.ctl = ctl; st.tx = tx;
                 if (menuB) { V.menu = V.menu ? 0 : 1; if (V.menu) placeMenu(hw) }
                 if (V.menu) {
                     for (const k of ["a", "d", "w", "s", "e", "r", "v"]) K(k, 0); st.sign = 0;
@@ -1405,37 +1444,91 @@ void main(){
 
             /* ---------------- frame loops ---------------- */
 
-            /* ---------------- GORILLA-TAG STYLE MOVEMENT ----------------
-               You move ONLY with your hands: touch the floor / walls / ceiling / ladders and push. Your body is launched the opposite way
-               to your hand's motion (relative to your head), like Gorilla Tag. Swimming: paddle with your hands. */
-            const GT = { prev: {}, tch: {}, gain: 6, cap: 1150 };
-            function gtag(dt, pose) {
-                me.vrh = 1; const SC = V.SC, gy = M.gy, hp = pose.transform.position, cs = Math.cos(st.yaw), sn = Math.sin(st.yaw), rH = 7 * (me.sz || 1);
-                let ax = 0, ay = 0, n = 0; const swim = typeof inW == "function" && inW(me);
+            /* ---------------- FREE-ROAM RIG (Gorilla Tag physics, full 3D, no 2D bounds) ----------------
+               Your hands push off any solid (floor, walls, trees, rocks...). While a hand touches, your body moves opposite to it;
+               when you let go you keep that velocity. Grip on a ladder/trunk = grab and climb. Right stick = smooth turn. */
+            const PH = { grav: 9.8, launch: 1.5, cap: 10, turn: 2.2, hr: .075, headR: .16, bodyR: .2, drop: .45, fric: 3.2 };
+            function pushOut(p, r, sol) {   // slide sphere p out of every box; returns the deepest contact normal (or null)
+                let best = null, bp = 0;
+                for (let it = 0; it < 3; it++) {
+                    let moved = false;
+                    for (const b of sol) {
+                        if (p[0] < b[0] - r || p[0] > b[3] + r || p[1] < b[1] - r || p[1] > b[4] + r || p[2] < b[2] - r || p[2] > b[5] + r) continue;
+                        const dx = p[0] - clamp(p[0], b[0], b[3]), dy = p[1] - clamp(p[1], b[1], b[4]), dz = p[2] - clamp(p[2], b[2], b[5]), d = Math.hypot(dx, dy, dz); let nx, ny, nz, pen;
+                        if (d > 1e-5) { if (d >= r) continue; nx = dx / d; ny = dy / d; nz = dz / d; pen = r - d }
+                        else { const c = [p[0] - b[0], b[3] - p[0], p[1] - b[1], b[4] - p[1], p[2] - b[2], b[5] - p[2]]; let m = 0; for (let i = 1; i < 6; i++) if (c[i] < c[m]) m = i; nx = ny = nz = 0; if (m == 0) nx = -1; else if (m == 1) nx = 1; else if (m == 2) ny = -1; else if (m == 3) ny = 1; else if (m == 4) nz = -1; else nz = 1; pen = c[m] + r }
+                        p[0] += nx * pen; p[1] += ny * pen; p[2] += nz * pen; moved = true; if (pen > bp) { bp = pen; best = [nx, ny, nz] }
+                    }
+                    if (!moved) break
+                }
+                return best
+            }
+            const rotQ = q => { const s_ = Math.sin(st.yaw), c_ = Math.cos(st.yaw); return [c_ * q[0] + s_ * q[2], q[1], -s_ * q[0] + c_ * q[2]] };
+            function setHead(h) { const r = rotQ(st.hraw); st.rig.O = [h[0] - r[0], h[1] - st.hraw[1], h[2] - r[2]] }
+            const headW = () => { const r = rotQ(st.hraw), O = st.rig.O; return [O[0] + r[0], O[1] + st.hraw[1], O[2] + r[2]] };
+            function rigReset(pose) {
+                const SC = V.SC, gy = M.gy, hp = pose.transform.position; st.hraw = [hp.x, hp.y, hp.z]; st.sc = SC; st.meObj = me; me.v3 = 1; me.vrh = 1;
+                st.rig = { O: [0, 0, 0], v: [0, 0, 0], buf: [], held: 0, pr: {}, tc: {} }; st.yaw = (me.f || 1) > 0 ? -Math.PI / 2 : Math.PI / 2; me.pz = 0;
+                setHead([me.x * SC, (gy - me.y) * SC + .8, 0]); Object.assign(st.rig, { sx: me.x, sy: me.y, svx: 0, svy: 0 })
+            }
+            function rigStep(dt) {
+                const g = st.rig, W = WORLD, SC = V.SC, gy = M.gy; if (!W || !g) return; const sol = W.solids, grabs = W.grabs;
+                if (!V.menu && Math.abs(st.tx || 0) > .2) { const h0 = headW(); st.yaw -= (st.tx - Math.sign(st.tx) * .2) / .8 * PH.turn * dt; setHead(h0) }
+                const frozen = (me.fz || 0) > performance.now(), swim = typeof inW == "function" && inW(me); let nT = 0, ax = 0, ay = 0, az = 0; const free = [];
                 for (const c of st.ctl) {
-                    const id = c.hand; if (!c.raw || !c.m || !(dt > 0)) { delete GT.prev[id]; continue }
-                    const rel = [c.raw[0] - hp.x, c.raw[1] - hp.y, c.raw[2] - hp.z], pv = GT.prev[id]; GT.prev[id] = rel;
-                    c.gx = c.m[12] / SC; c.gy = gy - c.m[13] / SC;
-                    if (!pv || V.menu) { GT.tch[id] = 0; continue }
-                    const vx = (rel[0] - pv[0]) / dt, vy = (rel[1] - pv[1]) / dt, vz = (rel[2] - pv[2]) / dt;
-                    const wx = cs * vx + sn * vz, wy = vy, sp = Math.hypot(wx, wy);   // hand velocity in game axes (m/s), +x right, +y up
-                    let hn = null;
-                    for (const b of R) { const h = hit(c.gx, c.gy, rH, b); if (!h) continue; if (b.o && h.ny >= -.5) continue; hn = h; break }
-                    if (hn) {
-                        let ux = wx, uy = -wy; const away = ux * hn.nx + uy * hn.ny; if (away > 0) { ux -= away * hn.nx; uy -= away * hn.ny }   // lifting off a surface doesn't shove you
-                        if (Math.hypot(ux, uy) > .25) { ax -= ux; ay -= uy; n++ }
-                        if (!GT.tch[id] && sp > .8) pulse(c.src)
-                    } else if (swim && sp > .8) { me.vx -= wx / SC * 5 * dt; me.vy += wy / SC * 5 * dt }
-                    GT.tch[id] = hn ? 1 : 0
+                    if (!c.raw) continue; const id = c.hand, pr = g.pr[id]; g.pr[id] = c.raw; c.touch = 0; if (!pr || V.menu || frozen) { g.tc[id] = 0; continue }
+                    const dl = rotQ([c.raw[0] - pr[0], c.raw[1] - pr[1], c.raw[2] - pr[2]]), r = rotQ(c.raw), p = [g.O[0] + r[0], g.O[1] + r[1], g.O[2] + r[2]];
+                    const n = pushOut(p, PH.hr, sol); let grab = false;
+                    if (c.grip) for (const b of grabs) if (p[0] > b[0] - .1 && p[0] < b[3] + .1 && p[1] > b[1] - .1 && p[1] < b[4] + .1 && p[2] > b[2] - .1 && p[2] < b[5] + .1) { grab = true; break }
+                    if (n) { const dn = dl[0] * n[0] + dl[1] * n[1] + dl[2] * n[2]; if (dn > 0) { dl[0] -= n[0] * dn; dl[1] -= n[1] * dn; dl[2] -= n[2] * dn } }   // lifting a hand off a surface doesn't pull you into it
+                    if (n || grab) { ax += dl[0]; ay += dl[1]; az += dl[2]; nT++; c.touch = 1; if (!g.tc[id] && Math.hypot(dl[0], dl[1], dl[2]) / dt > .8) pulse(c.src) } else if (swim) free.push(dl);
+                    g.tc[id] = (n || grab) ? 1 : 0
                 }
-                if (n) {
-                    const k = GT.gain / SC; let tx = ax * k, ty = ay * k; const s2 = Math.hypot(tx, ty); if (s2 > GT.cap) { tx *= GT.cap / s2; ty *= GT.cap / s2 }
-                    const q = Math.min(1, dt * 25); me.vx += (tx - me.vx) * q; me.vy += (ty - me.vy) * q
+                let ve = g.v;
+                if (frozen) { g.v = [0, 0, 0]; ve = g.v }
+                else if (nT) {
+                    let mv = [-ax / nT, -ay / nT, -az / nT]; const ml = Math.hypot(mv[0], mv[1], mv[2]), mx = 25 * dt; if (ml > mx) mv = mv.map(q => q * mx / ml);
+                    g.O[0] += mv[0]; g.O[1] += mv[1]; g.O[2] += mv[2]; g.v = [0, 0, 0]; ve = [mv[0] / dt, mv[1] / dt, mv[2] / dt]; g.buf.push(ve); if (g.buf.length > 5) g.buf.shift(); g.held = 1
+                } else {
+                    if (g.held) { const n = g.buf.length || 1, sm = [0, 0, 0]; for (const b of g.buf) { sm[0] += b[0]; sm[1] += b[1]; sm[2] += b[2] } let v = sm.map(q => q / n * PH.launch); const l = Math.hypot(v[0], v[1], v[2]); if (l > PH.cap) v = v.map(q => q * PH.cap / l); g.v = v; g.held = 0; g.buf = [] }
+                    const v = g.v; v[1] -= PH.grav * (swim ? .2 : 1) * dt;
+                    if (swim) { const dr = Math.max(0, 1 - 2.2 * dt); v[0] *= dr; v[1] *= dr; v[2] *= dr; for (const d of free) { v[0] -= d[0] / dt * .12; v[1] -= d[1] / dt * .12; v[2] -= d[2] / dt * .12 } const l = Math.hypot(v[0], v[1], v[2]); if (l > 6) { v[0] *= 6 / l; v[1] *= 6 / l; v[2] *= 6 / l } }
+                    g.O[0] += v[0] * dt; g.O[1] += v[1] * dt; g.O[2] += v[2] * dt; ve = v
                 }
-                if (Math.abs(me.vx) > 130) me.f = me.vx > 0 ? 1 : -1;
-                for (const c of st.ctl) {   // mirror real hands onto the gorilla's hands so other players see them too (index 0 = right, 1 = left)
-                    if (c.gx == null || (c.hand != "right" && c.hand != "left")) continue; const h = me.h[c.hand == "right" ? 0 : 1];
-                    h.px = h.x; h.py = h.y; h.x = clamp(c.gx - me.x, -70, 70); h.y = clamp(c.gy - me.y, -70, 70)
+                // body: head + chest spheres can't enter solids; velocity into a surface is removed and you slide with a little friction
+                for (const [r, off] of [[PH.headR, 0], [PH.bodyR, PH.drop]]) {
+                    const h = headW(), q = [h[0], h[1] - off, h[2]], q0 = q.slice(), n = pushOut(q, r, sol); if (!n) continue;
+                    g.O[0] += q[0] - q0[0]; g.O[1] += q[1] - q0[1]; g.O[2] += q[2] - q0[2]; const v = g.v, vn = v[0] * n[0] + v[1] * n[1] + v[2] * n[2];
+                    if (vn < 0) { v[0] -= n[0] * vn; v[1] -= n[1] * vn; v[2] -= n[2] * vn } const f = Math.max(0, 1 - PH.fric * dt); v[0] *= f; v[2] *= f; if (n[1] < .5) v[1] *= f
+                }
+                const H = headW(); me.pz = H[2] / SC; me.x = H[0] / SC; me.y = gy - (H[1] - .3) / SC; me.vx = ve[0] / SC; me.vy = -ve[1] / SC;
+                const fx = -Math.sin(st.yaw); if (Math.abs(fx) > .25) me.f = fx > 0 ? 1 : -1; g.sx = me.x; g.sy = me.y; g.svx = me.vx; g.svy = me.vy;
+                for (const c of st.ctl) {   // visible hands rest ON the surface even when your real hand goes through it
+                    if (!c.raw) continue; const r = rotQ(c.raw), p = [g.O[0] + r[0], g.O[1] + r[1], g.O[2] + r[2]]; pushOut(p, PH.hr, sol); c.vis = p;
+                    if (c.hand == "right" || c.hand == "left") { const h = me.h[c.hand == "right" ? 0 : 1]; h.px = h.x; h.py = h.y; h.x = clamp(p[0] / SC - me.x, -70, 70); h.y = clamp(gy - p[1] / SC - me.y, -70, 70) }
+                }
+            }
+            function rigPost() {   // the 2D sim still runs game logic (tag, zones, respawn): pick up teleports and velocity kicks from it
+                const g = st.rig, SC = V.SC, gy = M.gy; if (!g) return;
+                if (Math.hypot(me.x - g.sx, me.y - g.sy) > 90) { me.pz = 0; setHead([me.x * SC, (gy - me.y) * SC + .8, 0]); g.v = [0, 0, 0]; g.buf = []; g.held = 0; g.sx = me.x; g.sy = me.y; g.svx = g.svy = 0; return }
+                const dvx = me.vx - g.svx, dvy = me.vy - g.svy; if (Math.abs(dvx) > .5) g.v[0] += dvx * SC; if (Math.abs(dvy) > .5) g.v[1] -= dvy * SC
+            }
+            function selfArms(g, col, dk, skin) {   // proper arms: shoulder -> elbow (2-bone IK) -> wrist -> gorilla hand with fingers, drawn to the (surface-clamped) hand position
+                const e = st.eye, rgx = st.Rg[0], rgz = st.Rg[2], fing = mulC(skin, .78);
+                sphere(e[0], e[1] - .62, e[2], .24, col);
+                for (const side of [1, -1]) {
+                    const cc = st.ctl.find(q => q.hand == (side > 0 ? "right" : "left") && q.m); if (!cc) continue;
+                    const hv = cc.vis || [cc.m[12], cc.m[13], cc.m[14]], S0 = [e[0] + side * rgx * .2, e[1] - .3, e[2] + side * rgz * .2];
+                    const dx = hv[0] - S0[0], dy = hv[1] - S0[1], dz = hv[2] - S0[2], d0 = Math.hypot(dx, dy, dz) || 1e-3, L1 = .34, L2 = .36, d = Math.min(d0, L1 + L2 - .005);
+                    const ux = dx / d0, uy = dy / d0, uz = dz / d0, al = (L1 * L1 - L2 * L2 + d * d) / (2 * d), hh = Math.sqrt(Math.max(0, L1 * L1 - al * al));
+                    let px = side * rgx * .6, py = -1, pz = side * rgz * .6; const dp = px * ux + py * uy + pz * uz; px -= ux * dp; py -= uy * dp; pz -= uz * dp; const pl = Math.hypot(px, py, pz) || 1; px /= pl; py /= pl; pz /= pl;
+                    const E = [S0[0] + ux * al + px * hh, S0[1] + uy * al + py * hh, S0[2] + uz * al + pz * hh];
+                    dm(MESH.cyl, cylM(S0[0], S0[1], S0[2], E[0], E[1], E[2], .066), dk, 0); dm(MESH.cyl, cylM(E[0], E[1], E[2], hv[0], hv[1], hv[2], .052), dk, 0);
+                    sphere(S0[0], S0[1], S0[2], .09, dk); sphere(E[0], E[1], E[2], .07, dk);
+                    const hm = Float32Array.from(cc.m); hm[12] = hv[0]; hm[13] = hv[1]; hm[14] = hv[2]; const gr = cc.grip ? 1 : 0;
+                    dm(MESH.sph, mul(hm, tsr(0, 0, -.02, .13, .055, .14)), skin, 0);
+                    for (let i = 0; i < 4; i++) dm(MESH.cube, mul(hm, tsr(-.045 + i * .03, gr ? -.04 : -.002, gr ? -.085 : -.125, .026, .024, gr ? .055 : .09)), fing, 0);
+                    dm(MESH.cube, mul(hm, tsr(side > 0 ? -.075 : .075, gr ? -.03 : 0, -.05, .03, .026, .07)), fing, 0)
                 }
             }
             function vrSim(dt) { tick(dt); vcTick(); pfTick() }
@@ -1447,17 +1540,14 @@ void main(){
                 try {
                     if (!WORLD || WORLD.M !== M || WORLD.sig !== R.length) buildWorld();
                     const pose = fr.getViewerPose(ref); if (!pose) { vrSim(dt); return }
-                    const hp = pose.transform.position;
-                    if (!st.p0) { st.p0 = { x: hp.x, y: hp.y, z: hp.z }; st.yaw = me.f > 0 ? -Math.PI / 2 : Math.PI / 2 }
-                    const tg = (me.f || 1) > 0 ? -Math.PI / 2 : Math.PI / 2; st.yaw += wrapA(tg - st.yaw) * (1 - Math.exp(-dt * 11));
-                    const c = Math.cos(st.yaw), sn = Math.sin(st.yaw), head = headWorld(), p0 = st.p0;
-                    const rx = c * p0.x + sn * p0.z, rz = -sn * p0.x + c * p0.z;
-                    st.Rg = rotYm(st.yaw, head[0] - rx, head[1] - p0.y, 0 - rz);
-                    const hw = mul(st.Rg, pose.transform.matrix);
-                    poll(fr, hw); if (V.menu) drawMenu(); gtag(dt, pose); vrSim(dt); speedVig(dt); paintBackdrop(false);
-                    // sim moved: rebuild rig with fresh head position so the view never lags a frame behind the body
-                    const h2 = headWorld(); st.Rg = rotYm(st.yaw, h2[0] - rx, h2[1] - p0.y, 0 - rz);
-                    for (const c of st.ctl) if (c.mr) c.m = mul(st.Rg, c.mr); { const e = mul(st.Rg, pose.transform.matrix); st.eye = [e[12], e[13], e[14]] }
+                    const hp = pose.transform.position; st.hraw = [hp.x, hp.y, hp.z];
+                    if (!st.rig || st.meObj !== me || st.sc !== V.SC) rigReset(pose);
+                    const rg = () => rotYm(st.yaw, st.rig.O[0], st.rig.O[1], st.rig.O[2]);
+                    st.Rg = rg(); const hw = mul(st.Rg, pose.transform.matrix);
+                    poll(fr, hw); if (V.menu) drawMenu();
+                    rigStep(dt); vrSim(dt); rigPost(); speedVig(dt); paintBackdrop(false); st.Rg = rg();
+                    for (const c of st.ctl) if (c.mr) c.m = mul(st.Rg, c.mr);
+                    { const e = mul(st.Rg, pose.transform.matrix); st.eye = [e[12], e[13], e[14]] }
                     gl.bindFramebuffer(gl.FRAMEBUFFER, layer.framebuffer); gl.clearColor(0, 0, 0, 1); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
                     gl.useProgram(prog);
                     for (const view of pose.views) {
@@ -1482,7 +1572,7 @@ void main(){
             function updUI() {
                 const b = el("vrb"), c = el("v3b"), s = el("vrs"); if (!b) return;
                 b.textContent = V.xr ? "🥽 Exit VR" : "🥽 Enter VR (headset)"; c.textContent = V.on && !V.xr ? "🖥 Exit 3D view" : "🖥 3D view (no headset)";
-                s.textContent = V.xr ? "In VR. Gorilla-Tag movement: touch the floor/walls and push with your hands! Y = menu, B = interact." : V.on ? "3D view: drag to look around, wheel to zoom. Keyboard works as normal." : !isSecureContext ? "VR needs https or http://localhost (you are on an insecure page)." : V.sup === false ? "Browser sees no VR runtime. Start Virtual Desktop Streamer / SteamVR, set it as the active OpenXR runtime, then fully restart the browser." : "Start SteamVR / Virtual Desktop first, then press Enter VR."
+                s.textContent = V.xr ? "In VR. Gorilla Tag movement: push off anything with your hands, grip to climb, right stick = turn. Y = menu, B = interact." : V.on ? "3D view: drag to look around, wheel to zoom. Keyboard works as normal." : !isSecureContext ? "VR needs https or http://localhost (you are on an insecure page)." : V.sup === false ? "Browser sees no VR runtime. Start Virtual Desktop Streamer / SteamVR, set it as the active OpenXR runtime, then fully restart the browser." : "Start SteamVR / Virtual Desktop first, then press Enter VR."
             }
             function show3D(on) {
                 initGL(); cv.style.display = on ? "block" : "none"; el("c").style.visibility = on ? "hidden" : "visible";
@@ -1490,9 +1580,9 @@ void main(){
                 if (V.hudDom) V.hudDom.style.display = on && !V.xr ? "block" : "none"
             }
             V.enter3D = function () { try { show3D(true); V.on = 1; V.xr = 0; buildWorld(); say("3D view ON - drag to look around") } catch (e) { V.on = 0; say("3D view failed: " + e.message); console.warn(e) } updUI() };
-            V.exit3D = function () { try { me.vrh = 0 } catch (e) { } V.on = 0; V.xr = 0; if (cv) show3D(false); freeWorld(); for (const k in st.ks) K(k, 0); updUI() };
+            V.exit3D = function () { try { me.vrh = 0; me.v3 = 0 } catch (e) { } st.rig = null; V.on = 0; V.xr = 0; if (cv) show3D(false); freeWorld(); for (const k in st.ks) K(k, 0); updUI() };
             V.exit = function () { if (sess) { try { sess.end() } catch (e) { V.exit3D() } } else V.exit3D() };
-            V.setScale = function (v) { V.SC = v; S.vsc = v; try { save() } catch (e) { } buildWorld(); st.p0 = null };
+            V.setScale = function (v) { V.SC = v; S.vsc = v; try { save() } catch (e) { } buildWorld(); st.rig = null };
             V.toggleXR = async function () {
                 if (V.xr) return V.exit();
                 try {
@@ -1503,7 +1593,7 @@ void main(){
                     s.addEventListener("end", () => { sess = null; ref = null; layer = null; V.xr = 0; V.menu = 0; st.ctl = []; V.exit3D(); say("Left VR") });
                     layer = new XRWebGLLayer(s, gl, { antialias: true, alpha: false }); s.updateRenderState({ baseLayer: layer, depthNear: .05, depthFar: 4000 });
                     try { ref = await s.requestReferenceSpace("local-floor") } catch (e) { ref = await s.requestReferenceSpace("local") }
-                    st.p0 = null; st.lt = performance.now(); st.errs = 0; buildWorld(); s.requestAnimationFrame(onXR); say("VR on - touch the floor and push with your hands to move!"); updUI()
+                    st.p0 = null; st.lt = performance.now(); st.errs = 0; buildWorld(); s.requestAnimationFrame(onXR); say("VR on - push off surfaces with your hands. Grip = climb, right stick = turn"); updUI()
                 } catch (e) { console.warn("VR", e); sess = null; V.xr = 0; V.exit3D(); say(/no xr hardware|NotSupported/i.test(String(e && (e.message || e.name))) ? "Browser can't see your headset: its OpenXR runtime isn't set to Virtual Desktop / SteamVR. See the fix steps, or use the 3D view." : "VR: " + (e && e.message ? e.message : e) + " - try the 3D view"); updUI() }
             };
 
@@ -2282,7 +2372,7 @@ void main(){
             for (let s = 0; s < 3; s++)G.forEach((g, i) => {
                 if (g.net) return;
                 if (g == me && fly) { const n = ins[i], q = dt / 3; me.vx = ((n.d ? 1 : 0) - (n.a ? 1 : 0)) * 750; me.vy = ((n.s ? 1 : 0) - (n.w ? 1 : 0)) * 750; me.x = Math.max(20, Math.min(M.W - 20, me.x + me.vx * q)); me.y = Math.max(20, Math.min(M.H - 20, me.y + me.vy * q)); if (n.d || n.a) me.f = n.d ? 1 : -1; return }
-                step(g, ins[i], dt / 3 * (g == me ? sl : 1))
+                if (!g.v3) step(g, ins[i], dt / 3 * (g == me ? sl : 1))
             });
             G.forEach(g => {
                 g.t += dt;
@@ -2291,15 +2381,15 @@ void main(){
                 const tr = (g.r || !String(g.eq.trail).startsWith("st_")) ? g.eq.trail : "none"; if (tr != "none" && Math.hypot(g.vx, g.vy) > 120 && Math.random() < .7) parts.push({ x: g.x, y: g.y, vx: (Math.random() - .5) * 40, vy: tr == "snow" || tr == "leaf" || tr == "petal" ? 25 : tr == "fire" || tr == "ember" || tr == "witchfire" ? -50 : tr == "bubble" || tr == "wisp" || tr == "smoke" ? -30 : (Math.random() - .5) * 40, l: .7, c: TC(tr, g.t), k: TK[tr] || 0, s: TK[tr] ? 5 : tr == "bubble" || tr == "wisp" ? 6 : 4 })
             });
             parts.forEach(p => { p.x += p.vx * dt; p.y += p.vy * dt; p.l -= dt }); parts = parts.filter(p => p.l > 0);
-            hwTick(dt); zoneTick(); if (M.tk) M.tk(dt); cd -= dt; if (cd <= 0 && !op) for (const p of M.P) if ((keys.e || p.auto) && me.x > p.x && me.x < p.x + p.w && me.y > p.y && me.y < p.y + p.h) { load(p.to, M.n); return }
-            if (!M.nr) (RM ? oround : round)(dt); sync(); if (RM) RM.presence({ x: me.x | 0, y: me.y | 0, vx: me.vx | 0, vy: me.vy | 0, f: me.f, h: [me.h[0].x | 0, me.h[0].y | 0, me.h[1].x | 0, me.h[1].y | 0], hu: me.hue | 0, n: me.name, e: me.eq, it: me.it, tg: me.tg || 0, z: me.sz || 1 });
+            hwTick(dt); zoneTick(); if (M.tk) M.tk(dt); cd -= dt; if (cd <= 0 && !op) for (const p of M.P) if ((keys.e || p.auto) && me.x > p.x && me.x < p.x + p.w && me.y > p.y && me.y < p.y + p.h && Math.abs(me.pz || 0) < 170) { load(p.to, M.n); return }
+            if (!M.nr) (RM ? oround : round)(dt); sync(); if (RM) RM.presence({ x: me.x | 0, y: me.y | 0, vx: me.vx | 0, vy: me.vy | 0, f: me.f, h: [me.h[0].x | 0, me.h[0].y | 0, me.h[1].x | 0, me.h[1].y | 0], hu: me.hue | 0, n: me.name, e: me.eq, it: me.it, tg: me.tg || 0, z: me.sz || 1, pz: me.pz | 0 });
             msgT -= dt
         }
         function round(dt) {
             if (rd.st == "wait") { rd.t -= dt; if (rd.t <= 0) { G.forEach(g => { g.it = 0; g.tg = 0 }); const g = G[Math.random() * G.length | 0]; g.it = 1; rd.st = "play"; rd.t = 0; lastAlive = null; say(g == me ? "YOU are IT! Tag everyone!" : g.name + " is infected! RUN!") } }
             else if (rd.st == "play") {
                 rd.t += dt; if (!me.it) { me.sc = (me.sc || 0) + dt; if (me.sc >= 3) { me.sc = 0; S.coins++; save() } }
-                for (const t of G) if (t.it) for (const o of G) if (!o.it && Math.hypot(o.x - t.x, o.y - t.y) < 38) { o.it = 1; t.tg = (t.tg || 0) + 1; snd(t == me ? 700 : 150, .2); if (t == me) { S.coins += 5; save(); say("Tagged " + o.name + "! +5 coins") } if (o == me) say("You got infected!") }
+                for (const t of G) if (t.it) for (const o of G) if (!o.it && Math.hypot(o.x - t.x, o.y - t.y, (o.pz || 0) - (t.pz || 0)) < 38) { o.it = 1; t.tg = (t.tg || 0) + 1; snd(t == me ? 700 : 150, .2); if (t == me) { S.coins += 5; save(); say("Tagged " + o.name + "! +5 coins") } if (o == me) say("You got infected!") }
                 const al = G.filter(g => !g.it); if (al.length == 1) lastAlive = al[0];
                 if (!al.length) { rd.st = "end"; rd.t = 5; const w = lastAlive; if (w == me) { S.coins += 25; save(); say("You survived longest! +25 coins") } else say((w ? w.name : "Nobody") + " survived longest. New round soon.") }
             }
@@ -2322,8 +2412,8 @@ void main(){
             RM.peers().forEach(p => {
                 if (p.isMe) { if (p.sameTab) myId = p.peer; return } const d = p.presence; if (!d || d.x == null || p.kind != "viewer") return; seen[p.peer] = 1;
                 let g = OG[p.peer]; if (!g) { g = OG[p.peer] = mk({ net: 1, pid: p.peer, x: d.x, y: d.y, tx: d.x, ty: d.y }); G.push(g) }
-                if (!g.it && d.it && me.it && Math.hypot(d.x - me.x, d.y - me.y) < 90) { S.coins += 5; me.tg = (me.tg || 0) + 1; save(); snd(700, .2); say("Tagged " + d.n + "! +5 coins") }
-                Object.assign(g, { tx: d.x, ty: d.y, f: d.f, it: d.it, name: String(d.n || "goril").slice(0, 12), hue: +d.hu || 0, eq: d.e || g.eq, vx: d.vx, vy: d.vy, tg: d.tg, th: d.h })
+                if (!g.it && d.it && me.it && Math.hypot(d.x - me.x, d.y - me.y, (+d.pz || 0) - (me.pz || 0)) < 90) { S.coins += 5; me.tg = (me.tg || 0) + 1; save(); snd(700, .2); say("Tagged " + d.n + "! +5 coins") }
+                Object.assign(g, { tx: d.x, ty: d.y, f: d.f, it: d.it, name: String(d.n || "goril").slice(0, 12), hue: +d.hu || 0, eq: d.e || g.eq, vx: d.vx, vy: d.vy, tg: d.tg, th: d.h, pz: +d.pz || 0 })
             });
             for (const k in OG) if (!seen[k]) { G.splice(G.indexOf(OG[k]), 1); delete OG[k] }
         }
