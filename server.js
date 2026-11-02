@@ -112,6 +112,10 @@ const noteBan = (uh, ip) => { if (!uh) return; const o = BM[uh] || {}; BM[uh] = 
 const noteUnban = (uh, forgive) => { if (BM[uh]) { BM[uh].ih = ""; if (forgive && BM[uh].s > 0) BM[uh].s--; saveBM(); } };   // forgive = a staff member lifted it (counts as a false ban, so the strike is removed)
 const ipLinked = ip => { const ih = sha("ip:" + ip), n = Date.now(); for (const k in BM) if (BM[k].ih === ih && bans.has(k) && n - BM[k].t < 30 * 86400000) return k; return ""; };
 setInterval(() => bans.purge(), 60000);
+// One-off unban: set UNBAN=abcdef1234,ffee998877 (ID prefixes, 8+ chars) in Render, redeploy, then delete the variable.
+(process.env.UNBAN || "").split(",").map(s => s.trim().toLowerCase()).filter(s => s.length >= 8).forEach(pre => {
+    for (const k of [...bans.keys()]) if (k.startsWith(pre)) { bans.delete(k); noteUnban(k, true); console.log("[unban] lifted ban for " + k.slice(0, 10)); }
+}); saveBans();
 const fmtDur = ms => {   // 0 = permanent
     if (!ms) return "permanent";
     const m = Math.round(ms / 60000); if (m < 60) return m + " minute" + (m == 1 ? "" : "s");
