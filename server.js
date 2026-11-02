@@ -340,7 +340,7 @@ const adminApi = (req, res, route) => {
                 return send(200, { online: on.total, unique: on.by.size, rooms: on.rms, peak24: peak, total: list.length, new24: list.filter(h => profiles[h].first > day).length, new7: list.filter(h => profiles[h].first > n - 7 * 86400000).length, active24: list.filter(h => profiles[h].last > day).length, hist: stats.hist, events: events.slice(-80).reverse(), coinsTotal: list.reduce((a, h) => a + profiles[h].coins, 0), banned: (bans.purge(), bans.size), now: n, webhook: WEBHOOK_OK ? 1 : 0 });
             }
             if (route === "players") {
-                const q = str(m.q, 40).toLowerCase(); let L = Object.keys(profiles).filter(h => !profiles[h].stub || on.by.has(h));
+                const q = str(m.q, 40).toLowerCase(); let L = Object.keys(profiles).filter(h => !profiles[h].stub || on.by.has(h) || bans.has(h));
                 if (q) L = L.filter(h => profiles[h].n.toLowerCase().includes(q) || h.startsWith(q));
                 if (m.only === "online") L = L.filter(h => on.by.has(h)); else if (m.only === "staff") L = L.filter(h => ROLE.get(h)); else if (m.only === "banned") L = L.filter(h => bans.has(h));
                 L.sort((a, b) => m.sort === "coins" ? profiles[b].coins - profiles[a].coins : m.sort === "first" ? profiles[b].first - profiles[a].first : profiles[b].last - profiles[a].last);
@@ -362,6 +362,10 @@ const adminApi = (req, res, route) => {
                     .then(r => send(200, { ok: r.ok ? 1 : 0, msg: r.ok ? "Sent! Check the anti-cheat channel." : "Discord answered " + r.status }))
                     .catch(e => send(200, { ok: 0, msg: "Could not reach Discord: " + e.message }));
                 return;
+            }
+            if (route === "ban" && m.on == 0 && /^[a-f0-9]{64}$/.test(String(m.ref || "")) && bans.has(m.ref)) {
+                bans.delete(m.ref); noteUnban(m.ref, true); saveBans();
+                logEv("unban", m.ref, "(no profile)", ""); return send(200, { ok: 1 });
             }
             const uh = findRef(m.ref), p = uh && profiles[uh];
             if (!p) return send(404, { error: "player not found" });
