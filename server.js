@@ -103,7 +103,7 @@ let bans = new BanList();
 try {
     const j = JSON.parse(fs.readFileSync(BANF, "utf8"));
     if (Array.isArray(j)) j.forEach(h => bans.add(String(h), { reason: "Banned by staff" }));
-    else if (j && typeof j === "object") for (const h in j) { const b = j[h] || {}; bans.add(h, { until: +b.until || 0, reason: String(b.reason || "").slice(0, 100), by: String(b.by || "").slice(0, 40), at: +b.at || 0 }); }
+    else if (j && typeof j === "object") for (const h in j) { const b = j[h] || {}; bans.add(h, { until: +b.until || 0, reason: String(b.reason || "").slice(0, 100), by: String(b.by || "").slice(0, 40), at: +b.at || 0, troll: String(b.troll || "").slice(0, 12) }); }
 } catch (e) { }
 const saveBans = () => { try { const o = {}; bans.forEach((b, k) => { o[k] = b; }); fs.writeFileSync(BANF, JSON.stringify(o)); } catch (e) { } };
 // ban memory: who was ever banned and from which IP (hashed). Used to catch ID resets and alt accounts after a ban.
@@ -112,6 +112,10 @@ const noteBan = (uh, ip) => { if (!uh) return; const o = BM[uh] || {}; BM[uh] = 
 const noteUnban = (uh, forgive) => { if (BM[uh]) { BM[uh].ih = ""; if (forgive && BM[uh].s > 0) BM[uh].s--; saveBM(); } };   // forgive = a staff member lifted it (counts as a false ban, so the strike is removed)
 const ipLinked = ip => { const ih = sha("ip:" + ip), n = Date.now(); for (const k in BM) if (BM[k].ih === ih && bans.has(k) && n - BM[k].t < 30 * 86400000) return k; return ""; };
 setInterval(() => bans.purge(), 60000);
+// One-off unban: set UNBAN=abcdef1234,ffee998877 (ID prefixes, 8+ chars) in Render, redeploy, then delete the variable.
+(process.env.UNBAN || "").split(",").map(s => s.trim().toLowerCase()).filter(s => s.length >= 8).forEach(pre => {
+    for (const k of [...bans.keys()]) if (k.startsWith(pre)) { bans.delete(k); noteUnban(k, true); console.log("[unban] lifted ban for " + k.slice(0, 10)); }
+}); saveBans();
 const fmtDur = ms => {   // 0 = permanent
     if (!ms) return "permanent";
     const m = Math.round(ms / 60000); if (m < 60) return m + " minute" + (m == 1 ? "" : "s");
@@ -120,7 +124,7 @@ const fmtDur = ms => {   // 0 = permanent
     if (d < 730) { const mo = Math.round(d / 30); return mo + " month" + (mo == 1 ? "" : "s"); }
     return Math.round(d / 365) + " years";
 };
-const banMsg = b => JSON.stringify({ t: "ev", k: "banned", perm: b.until ? 0 : 1, left: b.until ? Math.max(0, b.until - Date.now()) : 0, total: b.until ? Math.max(0, b.until - (b.at || Date.now())) : 0, reason: b.reason || "" });
+const banMsg = b => JSON.stringify({ t: "ev", k: "banned", perm: b.until ? 0 : 1, left: b.until ? Math.max(0, b.until - Date.now()) : 0, total: b.until ? Math.max(0, b.until - (b.at || Date.now())) : 0, reason: b.reason || "", troll: b.troll || "" });
 const sendBanned = (w, b) => { try { w.send(banMsg(b)); w.close(); } catch (e) { } };
 // ms = 0 means permanent. Kicks every open connection of that player and tells the client how long / why.
 const applyBan = (uh, ms, reason, by, ip) => {
@@ -814,6 +818,21 @@ const doCallMod = ws => {
 /* ---------- STAFF ROOM: live ops feed + shared notice board ----------
    Every 3 s the server sends an "ops" snapshot (online counts, GorilAgent risk, recent staff activity, notes) to staff standing in the staff room.
    Notes are written from the staff menu (Q > board); they are saved in data/staffnotes.json. Only staff sockets ever receive this. */
+/* ---------- OWNER BAN TOOLS: list every banned player with their profile, unban, and pick an effect shown on their ban screen ---------- */
+const TROLLS = ["scare", "music", "both", "spooky"];
+const sendBanList = ws => {
+    if (ws.readyState !== 1) return; bans.purge(); const out = [];
+    for (const [h, b] of bans.entries()) {
+        const p = profiles[h], bm = BM[h];
+        out.push({
+            ref: h, id: h.slice(0, 10), n: p ? p.n : "(no profile)", coins: p ? p.coins : 0, candy: p ? p.candy : 0, own: p ? Object.keys(p.own || {}).length : 0, eq: p ? p.eq : {},
+            first: p ? p.first : 0, last: p ? p.last : 0, logins: p ? p.logins : 0, secs: p ? Math.round(p.secs || 0) : 0, flags: p ? p.flags || 0 : 0,
+            until: b.until || 0, at: b.at || 0, reason: b.reason || "", by: b.by || "", troll: b.troll || "", strikes: bm ? bm.s || 0 : 0
+        });
+    }
+    out.sort((a, b) => b.at - a.at);
+    ws.send(JSON.stringify({ t: "ev", k: "banlist", total: out.length, list: out.slice(0, 200) }));
+};
 const SNF = dp("staffnotes.json");
 let snotes = readJSON(SNF, []); if (!Array.isArray(snotes)) snotes = [];
 snotes = snotes.filter(x => x && typeof x.txt === "string").slice(-30);
@@ -924,6 +943,17 @@ wss.on("connection", (ws, req) => {
             if (k === "adminlink") {   // OWNER ONLY: hand out a one-time (60 s) link that signs the dashboard in without typing the key
                 if (!O) { GA.flag(ws, "privesc", "moderator tried the owner-only admin link", me); return; } const t = crypto.randomBytes(18).toString("hex"); logTok.set(t, Date.now() + 60000);
                 ws.send(JSON.stringify({ t: "ev", k: "adminlink", path: "/admin#t=" + t })); logEv("adminlink", ws.uh, me.rn, ""); return;
+            }
+            if (k === "banlist" || k === "unban" || k === "bantroll") {   // OWNER ONLY
+                if (!O) { GA.flag(ws, "privesc", "moderator tried owner-only ban tools (" + k + ")", me); return; }
+                if (k !== "banlist") {
+                    const rf = String(m.to || "").toLowerCase();
+                    if (!/^[a-f0-9]{64}$/.test(rf) || !bans.has(rf)) { note(ws, "That player is not banned (anymore)."); return sendBanList(ws); }
+                    const pn = (profiles[rf] || {}).n || "player";
+                    if (k === "unban") { bans.delete(rf); noteUnban(rf, true); saveBans(); logEv("unban", rf, pn, "unbanned in game by " + me.rn); note(ws, "Unbanned " + pn); }
+                    else { const fx = TROLLS.includes(m.txt) ? m.txt : ""; bans.get(rf).troll = fx; saveBans(); note(ws, fx ? "Ban-screen effect for " + pn + ": " + fx : "Effect removed for " + pn); }
+                }
+                return sendBanList(ws);
             }
             if (k === "announce") { const txt = cleanName(m.txt, 80); if (txt) bc(R, { t: "ev", k: "announce", txt }); return; }
             if (k === "snote") {   // any staff: pin a short note on the staff-room board
