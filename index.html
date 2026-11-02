@@ -910,14 +910,10 @@
             <div id="botsrow">Bots: <b id="bn"></b><input type="range" id="bots" min="1" max="12"></div>
             <div class="sec">TRAVEL</div>
             <div><button data-m="lobby">Lobby</button><button data-m="shop">Shop</button><button data-m="forest">Forest</button><button data-m="city">City</button><button data-m="sky">Sky</button><button data-m="desert">Desert</button><button data-m="staff" id="mst" hidden>Staff Room</button></div>
-            <div class="sec">VR / 3D</div>
-            <div><button id="vrb">🥽 Enter VR (headset)</button><button id="v3b">🖥 3D view (no headset)</button></div>
-            <small id="vrs"></small>
             <div class="sec">VOICE</div>
             <div><button id="vm0">Off</button><button id="vm1">Push-to-talk</button><button id="vm2">Open mic</button></div>
             <div class="row" style="margin-top:6px"><span>Volume <b id="vvn"></b>%</span><span>Muted: <b id="mun">0</b> <button id="umall">Clear</button></span></div>
             <input type="range" id="vv" min="0" max="100">
-            <small>Voice is peer-to-peer, so players in voice can see your IP.</small>
             <div class="sec">HELP</div>
             <div><button id="cm">🆘 Call a mod</button><button id="hp">How to play</button></div>
             <details>
@@ -930,7 +926,7 @@
             <div style="margin-top:10px"><button id="x">Close</button></div>
             <div class="sec">COMMUNITY</div>
             <div><button id="dc" style="background:#5865f2;color:#fff;width:100%">💬 Join our Discord</button></div>
-            <p class="own" style="margin:10px 0 0;text-align:center">made by Trixie, with love and too much banana.</p>
+            <p class="own" style="margin:10px 0 0;text-align:center">made by Trixie</p>
         </div>
     </div>
     <div id="sv" hidden><div class="tb"><span>STAFF VENT - <span id="svr"></span></span><span id="svx" style="cursor:pointer">[x]</span></div><div class="bd"><div id="svt"></div><div id="svc"></div><p class="own">Every action is re-checked by the server against its staff list. Fake clients are ignored.</p></div></div>
@@ -950,7 +946,7 @@
            The 2D game stays the ONE simulation (physics, bots, multiplayer, anti-cheat are all untouched). This module only
            draws that world in 3D and turns controller input into the same keys the keyboard uses.
            No external libraries: the server CSP blocks CDNs, so the renderer is plain WebGL2.
-           Open the menu (M) -> VR section. WebXR needs https or http://localhost. */
+           EXPERIMENTAL + STAFF ONLY: hidden from the normal menu. Staff turn it on for themselves in the staff menu (Q) -> "VR / 3D (experimental)". WebXR needs https or http://localhost. */
         const VR = (() => {
             "use strict";
             const D = document, el = id => D.getElementById(id);
@@ -1010,13 +1006,13 @@ void main(){ vec4 w = uM * vec4(aPos, 1.0); vN = mat3(uM) * aNrm; vC = aCol; vUv
             const FS = `#version 300 es
 precision mediump float; in vec3 vN; in vec4 vC; in vec2 vUv; uniform vec4 uCol; uniform vec4 uCol2; uniform int uMode; uniform sampler2D uTex; out vec4 o;
 void main(){
-      if (uMode == 2) { float h = normalize(vN).y * 0.5 + 0.5; o = vec4(mix(uCol2.rgb, uCol.rgb, smoothstep(0.42, 0.85, h)), 1.0); return; }
-      vec4 b = vC * uCol;
-      if (uMode == 1) b *= texture(uTex, vUv);
-      if (b.a < 0.01) discard;
-      float l = 1.0;
-      if (uMode == 0) { vec3 n = normalize(vN); l = 0.52 + 0.48 * max(dot(n, normalize(vec3(0.35, 0.85, 0.45))), 0.0); }
-      o = vec4(b.rgb * l, b.a);
+          if (uMode == 2) { float h = normalize(vN).y * 0.5 + 0.5; o = vec4(mix(uCol2.rgb, uCol.rgb, smoothstep(0.42, 0.85, h)), 1.0); return; }
+          vec4 b = vC * uCol;
+          if (uMode == 1) b *= texture(uTex, vUv);
+          if (b.a < 0.01) discard;
+          float l = 1.0;
+          if (uMode == 0) { vec3 n = normalize(vN); l = 0.52 + 0.48 * max(dot(n, normalize(vec3(0.35, 0.85, 0.45))), 0.0); }
+          o = vec4(b.rgb * l, b.a);
 }`;
             function sh(t, s) { const o = gl.createShader(t); gl.shaderSource(o, s); gl.compileShader(o); if (!gl.getShaderParameter(o, gl.COMPILE_STATUS)) throw new Error("shader: " + gl.getShaderInfoLog(o)); return o }
             const PV = (a, x, y, z, nx, ny, nz, c, u, v) => a.push(x, y, z, nx, ny, nz, c[0], c[1], c[2], c[3], u, v);
@@ -1569,22 +1565,23 @@ void main(){
             };
 
             /* ---------------- enter / exit ---------------- */
-            function updUI() {
-                const b = el("vrb"), c = el("v3b"), s = el("vrs"); if (!b) return;
-                b.textContent = V.xr ? "🥽 Exit VR" : "🥽 Enter VR (headset)"; c.textContent = V.on && !V.xr ? "🖥 Exit 3D view" : "🖥 3D view (no headset)";
-                s.textContent = V.xr ? "In VR. Gorilla Tag movement: push off anything with your hands, grip to climb, right stick = turn. Y = menu, B = interact." : V.on ? "3D view: drag to look around, wheel to zoom. Keyboard works as normal." : !isSecureContext ? "VR needs https or http://localhost (you are on an insecure page)." : V.sup === false ? "Browser sees no VR runtime. Start Virtual Desktop Streamer / SteamVR, set it as the active OpenXR runtime, then fully restart the browser." : "Start SteamVR / Virtual Desktop first, then press Enter VR."
+            function updUI() { try { rsv.last = ""; rsv() } catch (e) { } }
+            V.allowed = () => !!(ST && S.vrx);
+            V.status = function () {
+                return V.xr ? "In VR. Gorilla Tag movement: push off anything with your hands, grip to climb, right stick = turn. Y = menu, B = interact." : V.on ? "3D view: drag to look around, wheel to zoom. Keyboard works as normal." : !isSecureContext ? "VR needs https or http://localhost (you are on an insecure page)." : V.sup === false ? "Browser sees no VR runtime. Start Virtual Desktop Streamer / SteamVR, set it as the active OpenXR runtime, then fully restart the browser." : "Start SteamVR / Virtual Desktop first, then press Enter VR."
             }
             function show3D(on) {
                 initGL(); cv.style.display = on ? "block" : "none"; el("c").style.visibility = on ? "hidden" : "visible";
                 if (on && !V.hudDom) { const d = D.createElement("canvas"); d.width = 512; d.height = 300; d.style.cssText = "position:fixed;left:8px;top:8px;width:320px;height:188px;z-index:3;pointer-events:none"; D.body.appendChild(d); V.hudDom = d }
                 if (V.hudDom) V.hudDom.style.display = on && !V.xr ? "block" : "none"
             }
-            V.enter3D = function () { try { show3D(true); V.on = 1; V.xr = 0; buildWorld(); say("3D view ON - drag to look around") } catch (e) { V.on = 0; say("3D view failed: " + e.message); console.warn(e) } updUI() };
+            V.enter3D = function () { if (!V.allowed()) return; try { show3D(true); V.on = 1; V.xr = 0; buildWorld(); say("3D view ON - drag to look around") } catch (e) { V.on = 0; say("3D view failed: " + e.message); console.warn(e) } updUI() };
             V.exit3D = function () { try { me.vrh = 0; me.v3 = 0 } catch (e) { } st.rig = null; V.on = 0; V.xr = 0; if (cv) show3D(false); freeWorld(); for (const k in st.ks) K(k, 0); updUI() };
             V.exit = function () { if (sess) { try { sess.end() } catch (e) { V.exit3D() } } else V.exit3D() };
             V.setScale = function (v) { V.SC = v; S.vsc = v; try { save() } catch (e) { } buildWorld(); st.rig = null };
             V.toggleXR = async function () {
                 if (V.xr) return V.exit();
+                if (!V.allowed()) return;
                 try {
                     if (!navigator.xr) throw new Error("WebXR is not available here. Use Chrome/Edge on http://localhost (or https).");
                     initGL(); V.on = 1; show3D(true);
@@ -1601,7 +1598,6 @@ void main(){
             function init() {
                 try {
                     if (S.vsc) V.SC = clamp(+S.vsc, .015, .06); if (S.vvig != null) V.vig = S.vvig ? 1 : 0;
-                    el("vrb").onclick = () => V.toggleXR(); el("v3b").onclick = () => { if (V.on) V.exit(); else V.enter3D() };
                     if (navigator.xr && navigator.xr.isSessionSupported) navigator.xr.isSessionSupported("immersive-vr").then(ok => { V.sup = ok; updUI() }).catch(() => { V.sup = false; updUI() });
                     updUI()
                 } catch (e) { console.warn("VR init", e) }
@@ -2658,7 +2654,7 @@ void main(){
             c.fillStyle = "#d9b38c"; c.lineWidth = 2; g.h.forEach(h => { c.beginPath(); c.arc(h.x, h.y, 7, 0, 7); c.fill(); c.stroke() }); c.restore()
         }
         function frame(t) {
-            const dt = Math.min(.033, (t - last) / 1000); last = t; if (VR.xr) return requestAnimationFrame(frame); tick(dt); vcTick(); pfTick(); $("sb").hidden = !(ST || CR); if (ST || CR) { const l = ST ? "🛡 Staff (Q)" : "🎬 Creator (Q)"; if ($("sb").textContent != l) $("sb").textContent = l } if (!CR && cro) crT(0); if (!(ST || CR)) { if (fpOn) fpT(0); if (cleanOn) cleanT(0); crZoom = 1 }
+            const dt = Math.min(.033, (t - last) / 1000); last = t; if (VR.on && !(ST && S.vrx)) { try { VR.exit() } catch (e) { } } if (VR.xr) return requestAnimationFrame(frame); tick(dt); vcTick(); pfTick(); $("sb").hidden = !(ST || CR); if (ST || CR) { const l = ST ? "🛡 Staff (Q)" : "🎬 Creator (Q)"; if ($("sb").textContent != l) $("sb").textContent = l } if (!CR && cro) crT(0); if (!(ST || CR)) { if (fpOn) fpT(0); if (cleanOn) cleanT(0); crZoom = 1 }
             if (VR.on) { VR.render(dt); return requestAnimationFrame(frame) }
             Z = ZB * (fpOn ? 2.4 : crZoom); const vw = W0 / Z, vh = H0 / Z, lead = fpOn ? me.f * vw * .22 : 0, ck = Math.min(1, dt * (fpOn ? 16 : 8)); cam.x += (Math.max(0, Math.min(M.W - vw, me.x + lead - vw / 2)) - cam.x) * ck; cam.y += (Math.max(0, Math.min(M.H - vh, me.y - vh / 2)) - cam.y) * ck;
             bg(); const c = cx; c.save(); c.scale(Z, Z); c.translate(-cam.x, -cam.y);
@@ -3036,11 +3032,16 @@ Click a player (or press Tab) for their card: Mute / Report / Check. Staff mutes
         function svT(v) { sop = v; $("sv").hidden = !v; if (v) { rsv.last = ""; rsv() } }
         function cmd(k, to, txt, item, on, dur) { if ((ST || CR) && WS && WS.readyState == 1) WS.send(JSON.stringify({ t: "cmd", k, to, txt, item, on, dur })) }
         const FXB = [["launch", "Launch"], ["rocket", "Rocket"], ["freeze", "Freeze"], ["invert", "Invert"], ["lowgrav", "Low-G"], ["slow", "Slow"], ["home", "Respawn"], ["goto", "Bring"]];
+        function vrStaffUI() {
+            const on = !!S.vrx; let h = `<br><button data-s="vrx" class="${on ? "on" : ""}">🧪 VR / 3D (experimental) ${on ? "ON" : "off"}</button>`;
+            if (on) h += `<button data-s="vrgo">${VR.xr ? "🥽 Exit VR" : "🥽 Enter VR (headset)"}</button><button data-s="v3d">${VR.on && !VR.xr ? "🖥 Exit 3D view" : "🖥 3D view (no headset)"}</button><br><small>${esc(VR.status())}<br>Experimental, only for you. Other players don't see or get anything different.</small>`;
+            return h
+        }
         function rsv() {
             if (!ST) { $("sv").hidden = true; sop = 0; return }
             const O = ST == "owner"; if ((svTab == "owner" || svTab == "give") && !O) svTab = "players";
             $("svr").textContent = O ? "OWNER" : "MODERATOR";
-            $("svt").innerHTML = `<button data-s="uc" class="${ucOn ? "on" : ""}">🕶 Undercover ${ucOn ? "ON" : "off"} (U)</button><br>` + ["players", "ops", "board", "room", "items"].concat(O ? ["owner", "give"] : []).map(k => `<button data-v="${k}" class="${k == svTab ? "on" : ""}">${k}</button>`).join("");
+            $("svt").innerHTML = `<button data-s="uc" class="${ucOn ? "on" : ""}">🕶 Undercover ${ucOn ? "ON" : "off"} (U)</button>` + vrStaffUI() + `<br>` + ["players", "ops", "board", "room", "items"].concat(O ? ["owner", "give"] : []).map(k => `<button data-v="${k}" class="${k == svTab ? "on" : ""}">${k}</button>`).join("");
             let h = "";
             if (svTab == "give") {
                 if (gvTo != "self" && !OG[gvTo]) gvTo = "self";
@@ -3116,7 +3117,7 @@ Click a player (or press Tab) for their card: Mute / Report / Check. Staff mutes
             else if (d.gi) { cmd(gvMode, gvTo, "", d.gi); snd(600, .1) }
             else if (d.q) { const [c, i] = d.q.split("|"); if (ST && (i == "none" || (SCAT[c] || []).some(x => x[0] == i && (x[2] == "m" || ST == "owner")))) { S.eq[c] = i; save(); rsv.last = ""; rsv() } }
             else if (d.g) { const g = OG[d.g]; if (g) { me.x = g.tx; me.y = g.ty - 30; me.vx = me.vy = 0 } }
-            else if (d.s) { if (d.s == "uc") ucToggle(); else if (ST == "owner") { if (d.s == "fly") { flyOn = !flyOn; me.vx = me.vy = 0; say(flyOn ? "Fly ON" : "Fly OFF") } else if (d.s == "coins") { S.coins += 1000; save(); say("+1000 coins") } else if (d.s == "admin") { cmd("adminlink"); say("Opening the admin dashboard...") } } rsv.last = ""; rsv() }
+            else if (d.s) { if (d.s == "uc") ucToggle(); else if (d.s == "vrx") { if (ST) { S.vrx = S.vrx ? 0 : 1; if (!S.vrx && (VR.on || VR.xr)) VR.exit(); save(); say(S.vrx ? "VR / 3D (experimental) enabled for you" : "VR / 3D disabled") } } else if (d.s == "vrgo") { if (ST && S.vrx) VR.toggleXR() } else if (d.s == "v3d") { if (ST && S.vrx) { if (VR.on) VR.exit(); else VR.enter3D() } } else if (ST == "owner") { if (d.s == "fly") { flyOn = !flyOn; me.vx = me.vy = 0; say(flyOn ? "Fly ON" : "Fly OFF") } else if (d.s == "coins") { S.coins += 1000; save(); say("+1000 coins") } else if (d.s == "admin") { cmd("adminlink"); say("Opening the admin dashboard...") } } rsv.last = ""; rsv() }
             else if (d.o) { if (ST == "owner") selfFx(d.o); rsv.last = ""; rsv() }
             else if (d.sn) { const [a, v] = d.sn.split("|"); if (a == "post") { const el = $("sn"), t = (el.value || "").trim(); if (t) { cmd("snote", "", t); el.value = "" } } else if (ST == "owner") cmd(a == "clear" ? "snoteclear" : "snotedel", "", v || ""); snd(600, .1) }
             else if (d.x) { const [k, to] = d.x.split("|"); if (k == "ban") { openBan(to, (OG[to] || {}).name); return } if (k == "announce") { const t = ($("ann").value || "").trim(); if (t) { cmd("announce", "", t); $("ann").value = "" } } else cmd(k, to); snd(600, .1) }
